@@ -1,0 +1,99 @@
+{
+  "name": "dsh-devflow",
+  "description": "Automated development pipeline for DeepSeek Harness: requirement pool, LLM-driven refine/design/plan/review stages, per-stage waiting queues, workspace-routed implementation pump, and a browser control panel",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts"
+  ],
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build:types": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
+    "build": "pnpm run build:types && tsdown && cp wire/typert.*.js wire/typert.*.d.ts lib/",
+    "test": "vitest run",
+    "watch": "tsdown --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "link:/Users/heyue/deepseek-harness/vendor/schemastery",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent-default-model": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-api-remotes": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-client-runtime": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-fs": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-invariants": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-sandbox": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.1.0-rc.6",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "link:/Users/heyue/deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-agent": "link:/Users/heyue/deepseek-harness/packages/core/agent",
+    "@deepseek-ai/dsh-agent-default-model": "link:/Users/heyue/deepseek-harness/packages/core/agent-default-model",
+    "@deepseek-ai/dsh-api-remotes": "link:/Users/heyue/deepseek-harness/packages/api/remotes",
+    "@deepseek-ai/dsh-client-runtime": "link:/Users/heyue/deepseek-harness/packages/client/runtime",
+    "@deepseek-ai/dsh-client-ui-layout": "link:/Users/heyue/deepseek-harness/packages/client/ui-layout",
+    "@deepseek-ai/dsh-fs": "link:/Users/heyue/deepseek-harness/packages/fs/fs",
+    "@deepseek-ai/dsh-invariants": "link:/Users/heyue/deepseek-harness/packages/runtime-diagnostics/invariants",
+    "@deepseek-ai/dsh-llm": "link:/Users/heyue/deepseek-harness/packages/llm/llm",
+    "@deepseek-ai/dsh-sandbox": "link:/Users/heyue/deepseek-harness/packages/sandbox/sandbox",
+    "@deepseek-ai/dsh-tools": "link:/Users/heyue/deepseek-harness/packages/core/tools",
+    "@deepseek-ai/dsh-typert-generator": "link:/Users/heyue/deepseek-harness/packages/typert/generator",
+    "@deepseek-ai/dsh-typert-protocol": "link:/Users/heyue/deepseek-harness/packages/typert/protocol",
+    "@types/react": "~18.3.1",
+    "react": "^18.3.1"
+  }
+}

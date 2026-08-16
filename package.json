@@ -1,0 +1,17 @@
+{
+  "name": "dsh-devflow-repo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter dsh-devflow run build",
+    "test": "pnpm --filter dsh-devflow run test",
+    "sync:harness": "bash scripts/sync-to-harness.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "lightningcss": "^1.32.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
