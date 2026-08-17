@@ -8,3 +8,4 @@ todo_list/
 AGENTS.md
 .devflow/
 packages/devflow/node_modules
+.worktrees/

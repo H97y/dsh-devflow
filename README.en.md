@@ -123,6 +123,11 @@ Reset semantics: **deleting settings.json re-imports legacy settings
 rather than resetting to defaults**; to reset, edit the file content to
 `{"version":1,"stageModels":{}}`.
 
+Panel scope: prompt templates keep their own「提示词」entry in the workbench
+(content configuration, not migrated into the settings pane); host-level
+settings (`root`, concurrency caps) live in the profile patch layer and
+are not the panel's business.
+
 ### Verify and first run
 
 1. (After a first install or composition change) restart `dsh web` and open
