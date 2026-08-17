@@ -108,6 +108,10 @@ interface ProjectRuntime {
   /** Last load failure text (shown when this partition is read); null when healthy. */
   loadError: string | null
   busy: boolean
+  /** Wall-clock start of the current tick; 0 while idle (stall watchdog). */
+  tickStartedAt: number
+  /** Whether the watchdog already aborted the stalled tick's model call. */
+  stallAborted: boolean
   cooldown: number
   customPrompts: Record<string, string>
   activeController: AbortController | null
@@ -161,6 +165,16 @@ const DIRECTORY_TTL_MS = 10_000
 
 /** Upper bound of directory listings one discovery pass may spend. */
 const SCAN_BUDGET = 400
+
+/**
+ * A busy tick older than this is treated as stalled — typically an LLM stream
+ * that never finishes or a blocked fs operation. Without the watchdog the
+ * lane's busy flag sticks true forever and the project silently freezes.
+ */
+const STALL_WARN_MS = 10 * 60_000
+
+/** Grace after a stall abort before the lane is force-freed. */
+const STALL_FORCE_MS = 60_000
 
 /** Clip text to a bound with an ellipsis. */
 function clip(value: string, max: number): string {
@@ -244,11 +258,79 @@ export class DevflowService extends TypertRemoteService {
     this.maxActive = config.maxActive
     this.maxWorktrees = config.maxWorktrees
     this.logCap = config.logCap
-    this.timer = setInterval(() => {
-      for (const project of this.runtimes.values()) void this.tickProject(project)
-    }, config.tickIntervalMs)
+    // The timer drives the directory sync itself: runtimes are created lazily
+    // on first touch, so a process that restarts with the panel closed would
+    // otherwise tick over an empty map forever — “background automation”
+    // must not depend on browser traffic to boot its partitions.
+    this.timer = setInterval(() => { void this.tickAll() }, config.tickIntervalMs)
     ctx.effect(() => () => { clearInterval(this.timer) }, 'devflow.tickTimer')
     ctx.effect(() => this.registerTool(), 'devflow.tool')
+    void this.tickAll()
+  }
+
+  /**
+   * One global beat: refresh the project directory (TTL-cached), run the
+   * stall watchdog over every runtime, then tick each free lane.
+   */
+  private async tickAll(): Promise<void> {
+    try {
+      await this.syncProjects()
+    } catch (error) {
+      // A scan failure must not take the per-project lanes down with it;
+      // existing runtimes keep ticking on their loaded state.
+      this.ctx.logger.error('devflow: 项目目录同步失败: %s', describeUnknown(error))
+    }
+    const now = Date.now()
+    for (const project of this.runtimes.values()) {
+      const stalled = project.busy && project.tickStartedAt > 0
+        && now - project.tickStartedAt > STALL_WARN_MS
+      if (stalled && !project.stallAborted) {
+        // Stage 1: abort the in-flight model call. A signal-aware stream
+        // unwinds through the tick's normal error path (pipe.error /
+        // refine cooldown), freeing busy in its own finally.
+        project.stallAborted = true
+        this.ctx.logger.error(
+          'devflow: 项目 %s 的状态机跳已挂起 %d 秒，中止在途调用',
+          project.name, Math.round((now - project.tickStartedAt) / 1000),
+        )
+        if (project.activeController !== null) project.activeController.abort()
+        continue
+      }
+      if (stalled && project.stallAborted
+        && now - project.tickStartedAt > STALL_WARN_MS + STALL_FORCE_MS) {
+        // Stage 2: the abort did not unwind (a non-signal await hung). Free
+        // the lane so the project keeps advancing; the zombie tick's late
+        // finally/save is idempotent enough (worst case one stage re-runs)
+        // and strictly better than a permanently frozen partition.
+        this.ctx.logger.error('devflow: 项目 %s 中止后仍未返回，强制释放节拍', project.name)
+        project.busy = false
+        project.stallAborted = false
+        project.tickStartedAt = 0
+        // The zombie can no longer unwind, so whatever item it marked
+        // running would block that stage forever — surface a sticky,
+        // retryable error instead (the panel shows it with a retry button).
+        try {
+          const state = project.store
+          if (state !== null) {
+            let touched = false
+            for (const item of state.items) {
+              const pipe = item.pipeline
+              if (item.status === 'active' && pipe !== null && pipe.running) {
+                pipe.running = false
+                pipe.stageNote = null
+                pipe.error = { stage: pipe.stage, message: '状态机跳挂起被强制释放（阶段执行中断），可重试' }
+                this.log(project, item, '挂起跳被强制释放，阶段标记为出错')
+                touched = true
+              }
+            }
+            if (touched) await this.save(project)
+          }
+        } catch {
+          // best-effort: the lane is already freed
+        }
+      }
+      if (!project.busy) void this.tickProject(project)
+    }
   }
 
   /** Whole-state projection of one project partition (plus the directory). */
@@ -552,6 +634,16 @@ export class DevflowService extends TypertRemoteService {
         render: (_args, value: { text: string }) => [{ type: 'text', text: value.text }],
       },
       execute: async (args: DevflowReportArgs) => {
+        // Bootstrap the directory and every store first: after a process
+        // restart with no panel traffic the runtimes may not exist yet, and
+        // `next` must reflect disk state (not an empty in-memory map).
+        try {
+          await this.syncProjects()
+          await this.ensureAllLoaded()
+        } catch {
+          // per-project load failures surface through their own views; the
+          // pump still gets the best available picture below
+        }
         if (args.action === 'next') return { text: this.describeNextTask() }
         return await this.acceptReport(args)
       },
@@ -618,6 +710,8 @@ export class DevflowService extends TypertRemoteService {
       loading: null,
       loadError: null,
       busy: false,
+      tickStartedAt: 0,
+      stallAborted: false,
       cooldown: 0,
       customPrompts: {},
       activeController: null,
@@ -752,6 +846,8 @@ export class DevflowService extends TypertRemoteService {
     // 互斥须覆盖 ensureLoaded 阶段：否则上一跳仍在加载 store 时，
     // 下一跳已越过 busy 检查闯入状态机主体
     project.busy = true
+    project.tickStartedAt = Date.now()
+    project.stallAborted = false
     try {
       await this.ensureLoaded(project)
       if (project.cooldown > 0) {
@@ -813,6 +909,7 @@ export class DevflowService extends TypertRemoteService {
     } catch (error) {
       await this.recordTickFailure(project, error)
     } finally {
+      project.tickStartedAt = 0
       project.busy = false
     }
   }
