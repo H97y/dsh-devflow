@@ -237,6 +237,7 @@ export class DevflowUiStore {
           projects: [],
           ignoredRoots: [],
           waitingTotal: 0,
+          pump: { enabled: false, available: false, activeCount: 0, maxConcurrent: 0, model: null },
           items: [],
         }
         : this.#snap.view

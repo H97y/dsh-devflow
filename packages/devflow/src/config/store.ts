@@ -148,6 +148,15 @@ export class SettingsStore {
   /** Register the last persisted settings for synchronous resolution. */
   private lastLoaded: Settings | null = null
 
+  /**
+   * Sync peek at the loaded settings (null before the first load). Read-only
+   * projections (the panel view) use this; anything that must see disk truth
+   * goes through {@link load}.
+   */
+  cached(): Settings | null {
+    return this.cache
+  }
+
   private cachedSync(): Settings | null {
     return this.cache
   }

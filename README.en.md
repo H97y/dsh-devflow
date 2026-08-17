@@ -12,7 +12,9 @@ The browser side is a native embedded UI (not a floating popup): an entry at the
 ├── package.json / pnpm-workspace.yaml / tsconfig.{host,client}.json   # repo shell and aggregate build graph
 ├── packages/devflow/          # publishable package dsh-devflow
 │   ├── src/index.ts           # host service: per-project state machines + LLM stages + devflow model tool
+│   ├── src/pump.ts            # auto-pump: host-spawned root agents for tool stages (waiting-user tracking)
 │   ├── src/projects.ts        # project markers + partition identity (key derivation)
+│   ├── src/config/            # unified settings (per-stage model overrides + auto-pump toggle/model)
 │   ├── src/prompts.ts         # 9-stage default prompts + {{variable}} rendering
 │   ├── src/types.ts           # public types
 │   ├── src/client/            # browser UI (sidebar entry + main-area page with project switcher)
@@ -92,6 +94,8 @@ your profile patch layer (`~/.dsh/profiles/web/cordis.patch.yml`):
     # maxWorktrees: 2               # concurrent worktree cap per project (default 2)
     # logCap: 40                    # per-item log cap (default 40)
     # tickIntervalMs: 2000          # state machine tick (default 2000)
+    # pump:                         # auto-pump (host-spawned agents for tool stages)
+    #   maxConcurrent: 2            # global concurrent pump-agent cap (default 2; per-project toggle in the settings pane)
 ```
 
 **Auto-discovery & panel management (zero config)**: the plugin scans `root`
@@ -128,6 +132,42 @@ Panel scope: prompt templates keep their own「提示词」entry in the workbenc
 settings (`root`, concurrency caps) live in the profile patch layer and
 are not the panel's business.
 
+### Auto-pump: unattended tool stages
+
+The four tool stages — implement / fix-code / web verify / merge — need real
+tool capabilities (bash, file edits, playwright, git). By default a "session
+pump" executes them: in any session, have the model loop the `devflow` tool
+(`next` to claim a task → do the work → `report` the result).
+
+The **auto-pump** is the alternative: once enabled per project in the
+settings pane, the plugin host spawns **standalone real agent sessions**
+task by task — no parked pump session required —
+
+- **One-shot per task**: each task carries its own workspace routing and
+  prompt; the agent is disposed when done, so context never bloats and a
+  single failure never contaminates other tasks. The global concurrency cap
+  comes from the profile's `pump.maxConcurrent`.
+- **Agents genuinely wait when they need you**: a pump agent runs in a real
+  session, so its `ask_user_question` call suspends and the question is
+  broadcast to the Web UI (the sidebar lights up that session), while the
+  panel card is marked as waiting for your answer. Answering resumes the
+  run. When the ask tool is unavailable, the agent falls back to
+  `devflow report questions` and the panel's waiting queue.
+- **Security boundary**: the agent's sandbox is pinned at creation to
+  `workspace-write @ project root` — it cannot widen itself; approval
+  requests route to the Web UI the same way.
+- **Failure semantics**: an agent that ends without reporting marks the item
+  with a retryable error and stops respawning (no infinite loops on a broken
+  model) — press "retry" in the panel to resume. Disabling auto-pump lets
+  in-flight tasks finish and stops new spawns.
+- **Restart semantics**: pipeline state persists; a pending question
+  survives only as an interruption in the child session — the resumed agent
+  re-asks as needed. Manual pump sessions and the auto-pump coexist, so you
+  can take over any time.
+
+With auto-pump off (the default), behavior is unchanged: the card shows
+"waiting for a session pump" and your pump session claims the task.
+
 ### Verify and first run
 
 1. (After a first install or composition change) restart `dsh web` and open
@@ -139,9 +179,10 @@ are not the panel's business.
    the pool entry ("add a search box to the list") and hit submit
 4. The background runs: batch refinement (with size assessment) → selection →
    design → plan → review & revision → implementation (the `devflow` model
-   tool, driven by the session pump) → code review → web verification →
-   merge to main → report; anything needing your ruling pauses in the
-   waiting queue and auto-resumes once answered
+   tool, driven by the session pump or the auto-pump) → code review → web
+   verification → merge to main → report; anything needing your ruling
+   pauses in the waiting queue or as a pump-agent question and auto-resumes
+   once answered
 5. All state lives under `<root>/.devflow/` and survives restarts
 
 ### Troubleshooting
@@ -152,7 +193,7 @@ are not the panel's business.
 | Page opens but the status bar reports a connection error | Host half not mounted: the composition row's `name: dsh-devflow` must match the installed package name |
 | No `.devflow/` directory anywhere | It sits under the configured `root` (default: the `dsh web` working directory); set it explicitly per "Configure the workspace" |
 
-The browser UI mounts in two additive places: the entry button registers in `sidebar.footer.action` (sidebar foot, beside Settings, styled to match the native trigger rows; collapses to a 56px rail circle, carries a waiting-decision count badge); clicking it opens a full main-area page through `shell.overlay` (anchored to the sidebar's live right edge, tracking drags/collapses; a two-column master-detail layout — pool column with grouped sections on the left, item detail / artifact viewer / stage prompt editor on the right; Escape unwinds level by level). The browser half `$mount`s this package's generated `/remote` artifact itself — the `remote.devflow` namespace is mounted by the plugin, with no host-assembly wiring, so the npm install path works as-is. The `devflow` model tool (`next` / `report`) is called by the session pump to execute implement / fix-code / verify / merge tasks.
+The browser UI mounts in two additive places: the entry button registers in `sidebar.footer.action` (sidebar foot, beside Settings, styled to match the native trigger rows; collapses to a 56px rail circle; carries a waiting-decision count badge); clicking it opens a full main-area page through `shell.overlay` (anchored to the sidebar's live right edge, tracking drags/collapses; a two-column master-detail layout — pool column with grouped sections on the left, item detail / artifact viewer / stage prompt editor on the right; Escape unwinds level by level). The browser half `$mount`s this package's generated `/remote` artifact itself — the `remote.devflow` namespace is mounted by the plugin, with no host-assembly wiring, so the npm install path works as-is. The `devflow` model tool (`next` / `report`) is called by the session pump to execute implement / fix-code / verify / merge tasks; with the auto-pump enabled, those tasks run in standalone agent sessions the plugin host spawns itself (see the auto-pump section), and both shapes coexist.
 
 ## Publishing
 

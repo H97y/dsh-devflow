@@ -41,7 +41,10 @@ import { DEFAULT_PROMPTS, PROMPT_VARS, renderPrompt } from './prompts.ts'
 import type { DevflowPromptStage } from './prompts.ts'
 import { isProjectDir, isScanCandidate, normalizeRoot, projectIdentity, uniqueRoots } from './projects.ts'
 import { SettingsStore } from './config/store.ts'
-import { listHarnessModels } from './models.ts'
+import { listHarnessModels, activeHarnessModel } from './models.ts'
+import { resolvePumpSettings } from './config/schema.ts'
+import { PumpSupervisor, buildPumpPrompt } from './pump.ts'
+import type { PumpOutcome } from './pump.ts'
 import type { Settings, StageId } from './config/schema.ts'
 import type {
   DevflowAnswerRequest, DevflowArtifactRequest, DevflowDirListing, DevflowItem, DevflowIssue,
@@ -78,6 +81,15 @@ export interface Config {
   readonly logCap: number
   /** State-machine tick interval in milliseconds. */
   readonly tickIntervalMs: number
+  /**
+   * Deployment-wide auto-pump controls. Per-project enable/model live in
+   * each project's settings.json; only the process-wide lane cap is a
+   * composition concern (it budgets agent processes, not pipeline state).
+   */
+  readonly pump: {
+    /** Maximum concurrently spawned pump agents across every project. */
+    readonly maxConcurrent: number
+  }
 }
 
 /**
@@ -94,6 +106,9 @@ const ConfigSchema: s<Config> = s.object({
   maxWorktrees: s.number().step(1).min(0).default(2),
   logCap: s.number().step(1).min(5).default(40),
   tickIntervalMs: s.number().step(1).min(500).default(2000),
+  pump: s.object({
+    maxConcurrent: s.number().step(1).min(1).max(8).default(2),
+  }).default({ maxConcurrent: 2 }),
 })
 
 /** Public config schema (kept as a named export for the package's API face). */
@@ -262,12 +277,18 @@ export class DevflowService extends TypertRemoteService {
   private readonly maxActive: number
   private readonly maxWorktrees: number
   private readonly logCap: number
+  /** Deployment-wide auto-pump lane cap (composition config). */
+  private readonly pumpMaxConcurrent: number
   private readonly runtimes = new Map<string, ProjectRuntime>()
   private addedRoots: string[] = []
   private ignoredRoots: string[] = []
   private registryLoading: Promise<void> | null = null
   private directoryCache: { list: DevflowProjectInfo[]; at: number } | null = null
   private readonly timer: ReturnType<typeof setInterval>
+  /** Host-spawned pump-agent supervisor (tool stages without a parked session). */
+  private readonly pump: PumpSupervisor
+  /** Re-entrancy guard for the pump beat (tickAll overlaps itself freely). */
+  private pumpTicking = false
 
   /**
    * @param ctx - Host context carrying llm/fs/tools.
@@ -287,6 +308,15 @@ export class DevflowService extends TypertRemoteService {
     this.maxActive = config.maxActive
     this.maxWorktrees = config.maxWorktrees
     this.logCap = config.logCap
+    this.pumpMaxConcurrent = config.pump.maxConcurrent
+    this.pump = new PumpSupervisor(ctx, {
+      modelRoute: (projectKey) => this.pumpModelRoute(projectKey),
+      promptFor: (task) => buildPumpPrompt(task),
+      onSpawned: (task, sessionId) => {
+        void this.pumpNote(task.itemId, `自动泵已派出代理执行 ${task.type}（子会话 ${sessionId.slice(0, 8)}…）`)
+      },
+      onSettled: async (task, outcome) => await this.pumpSettled(task, outcome),
+    })
     // The timer drives the directory sync itself: runtimes are created lazily
     // on first touch, so a process that restarts with the panel closed would
     // otherwise tick over an empty map forever — “background automation”
@@ -294,6 +324,10 @@ export class DevflowService extends TypertRemoteService {
     this.timer = setInterval(() => { void this.tickAll() }, config.tickIntervalMs)
     ctx.effect(() => () => { clearInterval(this.timer) }, 'devflow.tickTimer')
     ctx.effect(() => this.registerTool(), 'devflow.tool')
+    // Plugin unload / HMR: cancel and drain every spawned pump agent. The
+    // durable pipeline state survives; the next boot respawns what is still
+    // pumpable, so teardown never orphans a workspace allocation.
+    ctx.effect(() => () => { this.pump.disposeAll() }, 'devflow.pump')
     // Boot stamp: correlates host logs with process restarts so “is the old
     // module still loaded?” is answerable from the log instead of guesswork.
     this.ctx.logger.info('devflow: 服务已启动（定时自举已启用，无需面板流量）')
@@ -363,6 +397,103 @@ export class DevflowService extends TypertRemoteService {
       }
       if (!project.busy) void this.tickProject(project)
     }
+    await this.tickPump()
+  }
+
+  /**
+   * The auto-pump beat: for every project whose settings enable it, hand
+   * pumpable tool-stage tasks to host-spawned root agents until the global
+   * lane budget is spent. Runs after the per-project lanes so workspace
+   * allocation this beat produced is immediately consumable.
+   */
+  private async tickPump(): Promise<void> {
+    if (this.pumpTicking) return
+    this.pumpTicking = true
+    try {
+      if (!this.pump.available()) return
+      await this.ensureAllLoaded()
+      const order = this.directoryCache?.list
+        ?? [...this.runtimes.values()].map(p => ({ key: p.key }))
+      for (const info of order) {
+        if (this.pump.runningCount() >= this.pumpMaxConcurrent) break
+        const project = this.runtimes.get(info.key)
+        if (project === undefined || project.store === null || project.settings === null) continue
+        let pumpOn = false
+        try {
+          pumpOn = resolvePumpSettings((await project.settings.load()).settings).enabled
+        } catch {
+          continue // unreadable settings: this project simply doesn't auto-pump
+        }
+        if (!pumpOn) continue
+        for (const item of project.store.items) {
+          if (this.pump.runningCount() >= this.pumpMaxConcurrent) break
+          if (item.status !== 'active' || item.pipeline === null) continue
+          const pipe = item.pipeline
+          if (!PUMP_STAGES.includes(pipe.stage) || pipe.waiting !== null || pipe.error !== null
+            || pipe.workspace === null) continue
+          this.pump.spawn(this.pumpTaskFor(project, item))
+        }
+      }
+    } finally {
+      this.pumpTicking = false
+    }
+  }
+
+  /** Resolve the spawn model route for one project (settings override → harness-active). */
+  private async pumpModelRoute(projectKey: string): Promise<{ provider: string; model: string } | null> {
+    const project = this.runtimes.get(projectKey)
+    if (project !== undefined && project.settings !== null) {
+      try {
+        const { settings } = await project.settings.load()
+        const pump = resolvePumpSettings(settings)
+        if (pump.model !== '') {
+          const slash = pump.model.indexOf('/')
+          if (slash > 0) return { provider: pump.model.slice(0, slash), model: pump.model.slice(slash + 1) }
+        }
+      } catch {
+        // fall through to the harness-active route
+      }
+    }
+    return activeHarnessModel(this.ctx)
+  }
+
+  /** Best-effort log line onto one item (spawn notice; never blocks spawning). */
+  private async pumpNote(itemId: string, note: string): Promise<void> {
+    try {
+      const located = await this.locateActive(itemId)
+      if (located === undefined) return
+      this.log(located.p, located.item, note)
+      await this.save(located.p)
+    } catch {
+      // best effort: the item may have been removed mid-flight
+    }
+  }
+
+  /** Evaluate one settled pump run against durable state and persist the verdict. */
+  private async pumpSettled(task: DevflowPumpTask, outcome: PumpOutcome): Promise<void> {
+    const located = await this.locateActive(task.itemId)
+    if (located === undefined) return // done/paused/removed meanwhile — nothing to say
+    const { p: project, item } = located
+    const pipe = this.pipe(item)
+    if (outcome.failure !== null && !outcome.cancelled) {
+      pipe.error = { stage: pipe.stage, message: `自动泵失败: ${clip(outcome.failure, 200)}` }
+      this.log(project, item, `自动泵失败: ${clip(outcome.failure, 160)}`)
+      await this.save(project)
+      return
+    }
+    if (outcome.cancelled) {
+      this.log(project, item, `自动泵代理被中断（子会话 ${outcome.sessionId.slice(0, 8)}…）`)
+      await this.save(project)
+      return
+    }
+    // Clean finish: either the report advanced the stage / raised a waiting
+    // queue (acceptReport already logged both), or the agent ended without
+    // reporting — the only genuinely suspicious shape, surfaced as retryable.
+    if (pipe.stage === task.type && pipe.waiting === null) {
+      pipe.error = { stage: pipe.stage, message: '自动泵代理结束但未回填结果（可重试）' }
+      this.log(project, item, '自动泵代理结束但未回填结果')
+      await this.save(project)
+    }
   }
 
   /** Whole-state projection of one project partition (plus the directory). */
@@ -374,6 +505,9 @@ export class DevflowService extends TypertRemoteService {
     if (project.store === null) {
       throw new Error(`devflow: 项目 ${project.name} 状态加载失败: ${project.loadError ?? '未知错误'}`)
     }
+    // Prime the settings cache so the pump projection reflects the file on
+    // the very first poll (not just after a config.get round trip).
+    await project.settings?.load().catch(() => undefined)
     return this.projectView(project, directory)
   }
 
@@ -451,6 +585,10 @@ export class DevflowService extends TypertRemoteService {
       item.resumeTo = 'raw'
       this.log(project, item, '已中断精炼并暂停')
     } else if (item.status === 'active') {
+      // A spawned pump agent owning this item's tool stage goes first: its
+      // turn is cancelled and drained by the supervisor's settle path, which
+      // sees the paused item and stays graceful (workspace released below).
+      this.pump.kill(item.id)
       this.abortActive(project, item.id)
       const pipe = this.pipe(item)
       const released = pipe.workspace?.kind
@@ -548,9 +686,15 @@ export class DevflowService extends TypertRemoteService {
     const project = this.resolveProject(request.project, directory)
     if (project.settings === null) throw new Error('devflow: 设置存储不可用')
     const loaded = await project.settings.load()
-    // Re-project onto the wire shape (StageId keys widen to string keys).
+    // Re-project onto the wire shape (StageId keys widen to string keys);
+    // the pump section passes through with defaults filled for old files.
+    const pump = resolvePumpSettings(loaded.settings)
     return {
-      settings: { version: 1, stageModels: { ...loaded.settings.stageModels } },
+      settings: {
+        version: 1,
+        stageModels: { ...loaded.settings.stageModels },
+        pump: { enabled: pump.enabled, model: pump.model },
+      },
       warnings: [...loaded.warnings],
     }
   }
@@ -582,8 +726,19 @@ export class DevflowService extends TypertRemoteService {
         }
       }
     }
+    if (next.pump !== undefined && next.pump.model !== '') {
+      const catalog = await listHarnessModels(this.ctx)
+      if (catalog.length > 0 && !catalog.some(m => m.id === next.pump?.model)) {
+        throw new Error(`配置校验失败: 泵模型不在 harness 已配置列表: ${next.pump.model}`)
+      }
+    }
     const saved = await project.settings.save(next as Settings)
-    return { version: 1, stageModels: { ...saved.stageModels } }
+    const pump = resolvePumpSettings(saved)
+    return {
+      version: 1,
+      stageModels: { ...saved.stageModels },
+      pump: { enabled: pump.enabled, model: pump.model },
+    }
   }
 
   /** Whitelisted harness model catalog for the panel dropdown (D1/D21). */
@@ -1768,6 +1923,18 @@ export class DevflowService extends TypertRemoteService {
   /** Wire-safe projection of one project's items for the panel. */
   private projectView(project: ProjectRuntime, directory: readonly DevflowProjectInfo[]): DevflowView {
     const state = this.requireState(project)
+    let pumpEnabled = false
+    let pumpModel: string | null = null
+    const loadedSettings = project.settings?.cached() ?? null
+    if (loadedSettings !== null) {
+      const pump = resolvePumpSettings(loadedSettings)
+      pumpEnabled = pump.enabled
+      pumpModel = pump.model === '' ? null : pump.model
+    }
+    let projectPumpActive = 0
+    for (const item of state.items) {
+      if (this.pump.statusOf(item.id).running) projectPumpActive++
+    }
     return {
       busy: project.busy,
       note: state.note ?? null,
@@ -1776,14 +1943,24 @@ export class DevflowService extends TypertRemoteService {
       projects: directory,
       ignoredRoots: this.ignoredRoots,
       waitingTotal: this.waitingTotal(),
+      pump: {
+        enabled: pumpEnabled,
+        available: this.pump.available(),
+        activeCount: projectPumpActive,
+        maxConcurrent: this.pumpMaxConcurrent,
+        model: pumpModel,
+      },
       items: state.items.map((item): DevflowItemView => {
         const pipe = item.pipeline
+        const pumpStatus = this.pump.statusOf(item.id)
         let note: string | null = null
         if (pipe !== null) {
           if (pipe.running) note = pipe.stageNote ?? '执行中'
           else if (PUMP_STAGES.includes(pipe.stage) && item.status === 'active'
             && pipe.workspace !== null && pipe.waiting === null && pipe.error === null) {
-            note = '等待会话泵执行'
+            note = pumpStatus.waitingUser
+              ? '泵代理等待你的应答'
+              : pumpStatus.running ? '自动泵执行中' : '等待会话泵执行'
           }
         }
         return {
@@ -1809,6 +1986,9 @@ export class DevflowService extends TypertRemoteService {
           workspaceBranch: pipe?.workspace?.branch ?? null,
           resourceWaiting: pipe?.resourceWaiting ?? null,
           reportFile: pipe?.files.report ?? null,
+          pumpRunning: pumpStatus.running,
+          pumpWaitingUser: pumpStatus.waitingUser,
+          pumpSessionId: pumpStatus.sessionId,
           log: item.log.slice(-14),
         }
       }),

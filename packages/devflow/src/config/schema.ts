@@ -31,6 +31,42 @@ export interface Settings {
    * absent from this map fall back to the harness-active model (D2).
    */
   stageModels: Partial<Record<StageId, string>>
+  /**
+   * Auto-pump section (optional; absent = disabled defaults). Controls the
+   * host-spawned root agents that execute implement/fix-code/verify/merge
+   * without a human-parked pump session.
+   */
+  pump?: PumpSettings
+}
+
+/**
+ * Per-project auto-pump settings. `model` follows the same
+ * `${provider}/${model}` id form as stageModels; '' routes spawned agents
+ * on the harness-active model.
+ */
+export interface PumpSettings {
+  enabled: boolean
+  model: string
+}
+
+/** Factory defaults: auto-pump off, spawn on the harness-active model. */
+export function defaultPumpSettings(): PumpSettings {
+  return { enabled: false, model: '' }
+}
+
+/**
+ * Effective pump settings for one settings document: a missing or partial
+ * pump section degrades field-by-field to defaults rather than rejecting
+ * the whole document (old files written before the section existed stay
+ * valid).
+ */
+export function resolvePumpSettings(settings: Settings): PumpSettings {
+  const pump = settings.pump
+  if (typeof pump !== 'object' || pump === null) return defaultPumpSettings()
+  return {
+    enabled: pump.enabled === true,
+    model: typeof pump.model === 'string' && parseStageModel(pump.model) !== null ? pump.model : '',
+  }
 }
 
 /** Factory defaults: no overrides, every stage uses the harness model. */
@@ -76,6 +112,21 @@ export function validateSettings(input: unknown): string[] {
     }
     if (parseStageModel(value) === null) {
       errors.push(`阶段 ${stage} 的模型格式须为 provider/model，收到 "${value}"`)
+    }
+  }
+  // Optional pump section: absent is valid (pre-section files); a present
+  // one must be well-formed so config.set keeps rejecting typo'd documents.
+  if (record.pump !== undefined) {
+    if (typeof record.pump !== 'object' || record.pump === null || Array.isArray(record.pump)) {
+      errors.push('pump 必须是对象')
+    } else {
+      const pump = record.pump as Record<string, unknown>
+      if (typeof pump.enabled !== 'boolean') errors.push('pump.enabled 必须是布尔值')
+      if (typeof pump.model !== 'string') {
+        errors.push('pump.model 必须是字符串')
+      } else if (pump.model !== '' && parseStageModel(pump.model) === null) {
+        errors.push(`pump.model 格式须为 provider/model 或空字符串，收到 "${pump.model}"`)
+      }
     }
   }
   return errors
