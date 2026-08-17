@@ -7,8 +7,13 @@
  * @module @deepseek-ai/dsh-devflow/src/config/schema
  */
 
-/** Pipeline stages a per-stage model override can target. */
-export const STAGE_IDS = ['refine', 'design', 'plan', 'review', 'codeReview', 'report'] as const
+/**
+ * LLM-backed stages a per-stage model override can target — named after the
+ * existing DevflowStage values they route through ('review-dp', 'code-review')
+ * plus 'refine' (a pool-stage LLM call with no DevflowStage entry). No third
+ * naming scheme: settings keys ARE the routing keys chat() matches on.
+ */
+export const STAGE_IDS = ['refine', 'design', 'plan', 'review-dp', 'code-review', 'report'] as const
 
 export type StageId = (typeof STAGE_IDS)[number]
 
@@ -17,12 +22,15 @@ export const STAGE_LABELS: Record<StageId, string> = {
   refine: '需求精炼',
   design: '设计',
   plan: '计划',
-  review: '评审·设计计划',
-  codeReview: '代码评审',
+  'review-dp': '评审·设计计划',
+  'code-review': '代码评审',
   report: '开发报告',
 }
 
-/** Unified plugin settings persisted at `<root>/.devflow/settings.json`. */
+/**
+ * Unified plugin settings, persisted per project at
+ * `<project-root>/.devflow/settings.json` (one file per project partition).
+ */
 export interface Settings {
   version: 1
   /**

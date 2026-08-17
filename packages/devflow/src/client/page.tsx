@@ -23,6 +23,7 @@ import type {
 } from '../types.ts'
 import type { DevflowRemote, DevflowUiStore, RemoteResult } from './devflow-ui.ts'
 import { callRemote, errorText, useDevflowUi } from './devflow-ui.ts'
+import { STAGE_IDS, STAGE_LABELS } from '../config/schema.ts'
 import css from './page.module.css'
 
 /** Sidebar fallback when the live edge cannot be measured (SIDEBAR_DEFAULT). */
@@ -68,16 +69,6 @@ const PROMPT_STAGE: Record<string, string> = {
   codeReview: '代码评审',
   report: '开发报告',
 }
-
-/** Settings-panel stage list (mirrors the host's StageId set). */
-const MODEL_STAGES: readonly (readonly [id: string, label: string])[] = [
-  ['refine', '需求精炼'],
-  ['design', '设计'],
-  ['plan', '计划'],
-  ['review', '评审·设计计划'],
-  ['codeReview', '代码评审'],
-  ['report', '开发报告'],
-]
 
 /** Badge tone → css class (kept explicit so every tone is checked here). */
 const TONE = {
@@ -417,9 +408,9 @@ function SettingsPane({ remote, project, pumpStatus, onBack }: {
         {catalogEmpty
           ? <div className={css.muted}>harness 暂无已配置模型，暂不能选择阶段模型（不影响回退运行）。</div>
           : null}
-        {MODEL_STAGES.map(([stage, label]) => (
+        {STAGE_IDS.map(stage => (
           <div key={stage} className={css.settingsRow}>
-            <label className={css.settingsLabel}>{label}</label>
+            <label className={css.settingsLabel}>{STAGE_LABELS[stage]}</label>
             <select
               className={css.select}
               value={draft[stage] ?? ''}

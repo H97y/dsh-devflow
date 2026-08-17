@@ -52,7 +52,7 @@ export async function listHarnessModels(ctx: Context): Promise<ModelInfo[]> {
   if (llm === undefined) return []
   const out: ModelInfo[] = []
   for (const provider of llm.listProviders()) {
-    let models: LlmFace['listModels'] extends (...args: never) => Promise<infer R> ? R : never
+    let models: Awaited<ReturnType<LlmFace['listModels']>>
     try {
       models = await llm.listModels(provider.id)
     } catch {
@@ -60,9 +60,12 @@ export async function listHarnessModels(ctx: Context): Promise<ModelInfo[]> {
     }
     for (const model of models) {
       // Explicit whitelist mapping only — never spread the source object.
+      // The label always carries the provider prefix: different providers
+      // expose same-named models, and a bare name would be ambiguous in
+      // the dropdown (display-only; settings store the full id).
       out.push({
         id: `${model.provider}/${model.id}`,
-        label: model.name === model.id ? model.name : `${model.name} (${model.provider}/${model.id})`,
+        label: `${model.name} (${model.provider}/${model.id})`,
       })
     }
   }

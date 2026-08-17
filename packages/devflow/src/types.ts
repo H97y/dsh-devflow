@@ -337,7 +337,7 @@ export interface DevflowProjectScanRequest {
   readonly rescan: boolean
 }
 
-/** Settings document persisted at `<root>/.devflow/settings.json` (wire shape). */
+/** Settings document persisted at `<project-root>/.devflow/settings.json` (wire shape). */
 export interface DevflowSettings {
   readonly version: 1
   /** StageId → `${provider}/${model}`; absent stages fall back to the harness model. */

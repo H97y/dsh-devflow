@@ -1,6 +1,7 @@
 /**
- * Settings store: load/save of `<root>/.devflow/settings.json` plus the
- * per-stage model resolver. The harness model state is injected as a
+ * Settings store: load/save of `<project-root>/.devflow/settings.json`
+ * plus the per-stage model resolver. Settings are per-project (one store
+ * per project partition). The harness model state is injected as a
  * parameter (D19) — this module never imports the models adapter and is
  * structurally identical under test mocks and production wiring.
  *
@@ -9,13 +10,6 @@
  * following the same "load → build the next whole document → atomic write"
  * shape. Last write wins; no concurrency protection or optimistic locking
  * (single-user, single-editor assumption).
- *
- * Re-import semantics (D20, explicit): `importLegacy` triggers iff
- * settings.json does not exist, and legacy files are kept forever (copy,
- * never delete) — deleting settings.json re-triggers the legacy import
- * rather than resetting to defaults. To reset, edit the file content to
- * `{"version":1,"stageModels":{}}`. No marker file / migration-completed
- * bit is introduced (YAGNI).
  *
  * @module @deepseek-ai/dsh-devflow/src/config/store
  */
@@ -59,7 +53,7 @@ export class SettingsStore {
 
   /**
    * @param ctx - host context carrying fs.
-   * @param dir - the project's `.devflow` directory.
+   * @param dir - the project's `.devflow` directory (`<project-root>/.devflow`).
    * @param policy - workspace-write policy scoped to the project root.
    */
   constructor(
@@ -74,18 +68,19 @@ export class SettingsStore {
   }
 
   /**
-   * Load settings (cached after the first hit). File absent → run the
-   * legacy import (D20 trigger: absence, and only absence); unreadable /
-   * unknown version / invalid fields → defaults plus warnings, and the
-   * original file is never overwritten by the load path.
+   * Load settings (cached after the first hit). File absent → defaults,
+   * persisted so the file exists from the first read — deleting the file
+   * IS the reset. Unreadable / unknown version / invalid fields →
+   * defaults plus warnings, and the original file is never overwritten
+   * by the load path.
    */
   async load(): Promise<LoadResult> {
     if (this.cache !== null) return { settings: this.cache, warnings: this.cacheWarnings }
     const raw = await this.read()
     if (raw === null) {
-      // D20: absence is the sole import trigger; legacy files are copied,
-      // never removed, so the import is idempotent per existence.
-      const settings = await this.importLegacy()
+      // No file yet: defaults, persisted so the file exists from the first
+      // read. Deleting the file resets to defaults (next load recreates it).
+      const settings = defaultSettings()
       await this.persist(settings)
       this.cache = settings
       this.cacheWarnings = []
@@ -168,19 +163,6 @@ export class SettingsStore {
       return { provider: '', model: '', source: 'fallback', note: `${note}；且 harness 无当前模型` }
     }
     return { provider: harness.active.provider, model: harness.active.model, source: 'fallback', note }
-  }
-
-  /**
-   * Copy-import legacy preference files (D3/D20). The current legacy
-   * surfaces are content registries rather than preference toggles —
-   * prompts.json holds prompt overrides with its own panel editor, and
-   * projects.json is runtime state — so per the migration criteria
-   * (preferences move, execution state stays) there is nothing to migrate:
-   * this returns defaults. The trigger logic stays so future legacy keys
-   * have exactly one insertion point.
-   */
-  private async importLegacy(): Promise<Settings> {
-    return defaultSettings()
   }
 
   /**

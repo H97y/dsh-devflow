@@ -21,8 +21,11 @@
  * The panel reaches this service through generated Remotes
  * (state/submit/answer/cancel/resume/retry/artifact/prompts/prompt-set plus
  * the project-add/remove/scan/pick/list-dir management face); the model
- * reaches it through the `devflow` tool (next/report). All durable state
- * lives under `<root>/.devflow/` as lossless JSON.
+ * reaches it through the `devflow` tool (next/report). Durable state is
+ * per-project: each partition's pool, prompts, and settings live under
+ * that project's own `<project-root>/.devflow/` as lossless JSON; the
+ * one cross-project file — the shared project registry — sits under the
+ * workspace root's `.devflow/`.
  *
  * @module @deepseek-ai/dsh-devflow
  */
@@ -1310,7 +1313,7 @@ export class DevflowService extends TypertRemoteService {
       design: pipe.artifacts.design,
       plan: pipe.artifacts.plan,
       answers: this.answersText(pipe),
-    }), 8192, 'review', item))
+    }), 8192, 'review-dp', item))
     pipe.round++
     const issues = asIssues(output.issues)
     pipe.artifacts.reviews.push({ phase: 'dp', round: pipe.round, verdict: asText(output.verdict, ''), issues })
@@ -1384,7 +1387,7 @@ export class DevflowService extends TypertRemoteService {
       fixReport: lastFix?.summary ?? '无',
       files: filesText,
       answers: this.answersText(pipe),
-    }), 8192, 'codeReview', item))
+    }), 8192, 'code-review', item))
     pipe.round++
     const issues = asIssues(output.issues)
     pipe.artifacts.reviews.push({ phase: 'code', round: pipe.round, verdict: asText(output.verdict, ''), issues })
