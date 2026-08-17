@@ -388,7 +388,7 @@ function SettingsPane({ remote, project, onBack }: {
           <div key={index} className={css.errorText}>{`⚠ ${warning}`}</div>
         ))}
         <div className={css.muted}>
-          未配置的阶段使用 harness 当前模型；候选只读自 harness 已配置模型。
+          未配置的阶段使用 harness 当前模型；候选只读自 harness 已配置模型。实施 / 修复 / Web 验证 / 合并阶段由会话泵执行，模型跟随当前会话，不在此配置。
         </div>
         {modelsError !== ''
           ? <div className={css.errorText}>{`⚠ 模型列表加载失败: ${modelsError}`}</div>
