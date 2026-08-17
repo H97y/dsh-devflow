@@ -38,9 +38,9 @@ Day-to-day iteration: edit code → `pnpm build` → reload the browser page (no
 
 ## Quick start (install and first use)
 
-> **Publish status**: `dsh-devflow` is not yet on npm (see "Publishing" for the
-> prerequisites). Until then, external users should use "Option B: from
-> source" below.
+> **Publish status**: `dsh-devflow@0.1.0` is live on npm
+> ([registry](https://www.npmjs.com/package/dsh-devflow)) — one command to
+> install; building from source is only for developers.
 
 ### Prerequisites
 
@@ -49,23 +49,24 @@ Day-to-day iteration: edit code → `pnpm build` → reload the browser page (no
   needs a recent rc line
 - pnpm as the profile plugin installer (set up by dsh)
 
-### Option A: npm install (once published — recommended)
+### Install (npm, recommended)
 
 One command handles the dependency and the composition wiring (the
 `dsh.bundle` manifest + the in-package `cordis.patch.yml` take effect
-automatically; the `@deepseek-ai/*` peers resolve through pnpm — nothing
-manual):
+automatically; the `@deepseek-ai/*` peers come preinstalled with the
+deployment — nothing manual):
 
 ```bash
 dsh plugin --profile web add dsh-devflow
 ```
 
-### Option B: from source (works today; needs a local deepseek-harness checkout)
+### From source (developers only; needs a local deepseek-harness checkout)
 
-Runtime dependencies and build-time types currently use `link:` paths into a
-local harness checkout (see the dev-loop section). After cloning, point the
-`link:/...` entries in `packages/devflow/package.json` at your own checkout,
-then build and link into the profile:
+Runtime dependencies are all on npm now; only build-time types still use
+`link:` paths into a local harness checkout (see the dev-loop section).
+After cloning, point the `link:/...` entries in
+`packages/devflow/package.json` at your own checkout, then build and link
+into the profile:
 
 ```bash
 git clone https://github.com/H97y/dsh-devflow.git
@@ -75,8 +76,6 @@ cd dsh-devflow
 pnpm install && pnpm build && pnpm test
 pnpm sync:profile        # link into ~/.dsh/profiles/web (DSH_PROFILE picks another)
 ```
-
-> Without a local harness checkout, wait for the npm release (Option A).
 
 ### Configure the workspace
 
@@ -122,6 +121,14 @@ The browser UI mounts in two additive places: the entry button registers in `sid
 
 ## Publishing
 
-1. `peerDependencies` already declare npm version ranges; the `link:` dependencies exist only in the iteration copy under `devDependencies`/`dependencies` — switch back to npm ranges and verify before publishing (the `@deepseek-ai/dsh-*` rc versions on npm currently lag the harness checkout; switch once they catch up).
-2. `pnpm --filter dsh-devflow publish --access public`
-3. Add the topic `dsh-plugin` to the GitHub repo (the official ecosystem's discovery mechanism).
+`dsh-devflow@0.1.0` was published to npm on 2026-08-17. The flow for
+subsequent releases:
+
+1. Runtime dependencies are all npm ranges; the `link:` entries under
+   `devDependencies` are build-time only and never ship. Where npm's
+   `@deepseek-ai/dsh-*` rc versions lag the harness checkout, the
+   `peerDependencies` `>=` ranges cover both (declared accordingly).
+2. Bump `version` in `packages/devflow/package.json` → `pnpm build && pnpm
+   test` → `pnpm --filter dsh-devflow publish --access public`
+3. The GitHub repo already carries the `dsh-plugin` topic (the official
+   ecosystem's discovery mechanism).

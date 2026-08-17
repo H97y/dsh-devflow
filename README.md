@@ -51,8 +51,8 @@ checkout 后可改为直接依赖 npm 包。
 
 ## 快速上手（安装与首次使用）
 
-> **发布状态**：`dsh-devflow` 尚未发布到 npm（发布前置条件见「发布路径」节）。
-> 在发布之前，外部用户请走下方「方式 B：从源码安装」。
+> **发布状态**：`dsh-devflow@0.1.0` 已发布 npm（[registry](https://www.npmjs.com/package/dsh-devflow)），
+> 一条命令即可安装；从源码安装仅开发者需要。
 
 ### 前置条件
 
@@ -60,31 +60,29 @@ checkout 后可改为直接依赖 npm 包。
   `dsh web`；插件使用的 `sidebar.footer.action` 插槽需要较新的 rc 版本
 - profile 使用的插件安装器是 pnpm（随 dsh 初始化）
 
-### 方式 A：npm 安装（发布后可用，推荐）
+### 安装（npm，推荐）
 
 一条命令完成依赖安装与组合接线（`dsh.bundle` manifest + 包内 `cordis.patch.yml`
-自动生效，`@deepseek-ai/*` peer 依赖由 pnpm 自动解析，无需手动处理）：
+自动生效，`@deepseek-ai/*` peer 依赖由部署预装，无需手动处理）：
 
 ```bash
 dsh plugin --profile web add dsh-devflow
 ```
 
-### 方式 B：从源码安装（当前可用；需要本地 deepseek-harness checkout）
+### 从源码安装（仅开发者；需要本地 deepseek-harness checkout）
 
-运行时依赖与构建期类型当前以 `link:` 指向本地 harness checkout（见「开发回路」
-节），因此克隆本仓库后需把 `packages/devflow/package.json` 中的 link 路径改为
-你的 checkout 路径，再构建并 link 进 profile：
+运行时依赖已全部走 npm；仅构建期类型仍以 `link:` 指向本地 harness checkout
+（见「开发回路」节）。克隆本仓库后需把 `packages/devflow/package.json` 中的
+link 路径改为你的 checkout 路径，再构建并 link 进 profile：
 
 ```bash
 git clone https://github.com/H97y/dsh-devflow.git
 cd dsh-devflow
 # 编辑 packages/devflow/package.json：把 link:/Users/heyue/deepseek-harness/...
-#   改为 link:<你的-harness-checkout>/...（构建期类型解析也需要它）
+#   改为 link:<你的-harness-checkout>/...（构建期类型解析需要它）
 pnpm install && pnpm build && pnpm test
 pnpm sync:profile        # link 进 ~/.dsh/profiles/web（DSH_PROFILE 可换 profile）
 ```
-
-> 无本地 harness checkout 的用户请等待 npm 发布（方式 A）。
 
 ### 配置工作区
 
@@ -132,8 +130,11 @@ pnpm sync:profile        # link 进 ~/.dsh/profiles/web（DSH_PROFILE 可换 pro
 
 ## 发布路径
 
-1. `peerDependencies` 已按 npm 版本范围声明；`link:` 依赖仅存在于
-   `devDependencies`/`dependencies` 的迭代副本，发布前需切回 npm 范围并验证
-   （当前 npm 上的 `@deepseek-ai/dsh-*` rc 版本落后于 harness checkout，等追平后切换）。
-2. `pnpm --filter dsh-devflow publish --access public`
-3. GitHub 仓库添加 topic `dsh-plugin`（官方生态的发现机制）。
+`dsh-devflow@0.1.0` 已于 2026-08-17 发布 npm。后续版本的发布流程：
+
+1. 运行时依赖全部为 npm 范围；`devDependencies` 中的 `link:` 仅构建期使用，不随包
+   发布。npm 上的 `@deepseek-ai/dsh-*` rc 版本落后于 harness checkout 时，以
+   `peerDependencies` 的 `>=` 范围兼容（已按此声明）。
+2. 改 `packages/devflow/package.json` 的 `version` → `pnpm build && pnpm test` →
+   `pnpm --filter dsh-devflow publish --access public`
+3. GitHub 仓库已添加 topic `dsh-plugin`（官方生态的发现机制）。
