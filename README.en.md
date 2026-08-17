@@ -158,7 +158,9 @@ task by task — no parked pump session required —
   `devflow report questions` and the panel's waiting queue.
 - **Security boundary**: the agent's sandbox is pinned at creation to
   `workspace-write @ project root` — it cannot widen itself; approval
-  requests route to the Web UI the same way.
+  requests route to the Web UI the same way, and the panel card lights up
+  a "waiting for your approval" badge with the same one-click jump into
+  the child session; the run resumes once decided.
 - **Failure semantics**: an agent that ends without reporting marks the item
   with a retryable error and stops respawning (no infinite loops on a broken
   model) — press "retry" in the panel to resume. Disabling auto-pump lets

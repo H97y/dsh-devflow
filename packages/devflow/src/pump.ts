@@ -83,6 +83,7 @@ export interface PumpOutcome {
 export interface PumpItemStatus {
   readonly running: boolean
   readonly waitingUser: boolean
+  readonly waitingApproval: boolean
   readonly sessionId: string | null
 }
 
@@ -93,6 +94,8 @@ interface PumpRun {
   handle: AgentHandleFace | null
   /** ask_user_question callIds without a matching tool/result yet. */
   readonly asks: Set<string>
+  /** approval/asked ids without a matching approval/decided yet. */
+  readonly approvals: Set<string>
   cancelled: boolean
 }
 
@@ -112,9 +115,12 @@ export class PumpSupervisor {
     private readonly host: PumpHost,
   ) {
     // ask_user_question pending tracking: pair `tool/call` with
-    // `tool/result` by call id. The marker is process-local observability
-    // (the question itself already travels through the GUI's own channel);
-    // losing it on restart only loses the badge, never the interaction.
+    // `tool/result` by call id; approval pending tracking: pair the
+    // user-approval service's durable `approval/asked` / `approval/decided`
+    // audit pair by approval id (both ride the same session/event firehose).
+    // The markers are process-local observability (the interactions
+    // themselves already travel through the GUI's own channels); losing
+    // them on restart only loses the badge, never the interaction.
     this.disposeEvents = ctx.on('session/event', (session: { id: string }, event: { type: string; data: unknown }) => {
       const run = this.bySession.get(session.id)
       if (run === undefined) return
@@ -125,6 +131,12 @@ export class PumpSupervisor {
         const data = event.data as { message?: { content?: readonly { toolCallId?: unknown }[] } }
         const block = data.message?.content?.[0]
         if (block !== undefined && typeof block.toolCallId === 'string') run.asks.delete(block.toolCallId)
+      } else if (event.type === 'approval/asked') {
+        const data = event.data as { id?: unknown }
+        if (typeof data.id === 'string') run.approvals.add(data.id)
+      } else if (event.type === 'approval/decided') {
+        const data = event.data as { id?: unknown }
+        if (typeof data.id === 'string') run.approvals.delete(data.id)
       }
     })
   }
@@ -142,8 +154,13 @@ export class PumpSupervisor {
   /** Per-item projection for the panel view. */
   statusOf(itemId: string): PumpItemStatus {
     const run = this.runs.get(itemId)
-    if (run === undefined) return { running: false, waitingUser: false, sessionId: null }
-    return { running: true, waitingUser: run.asks.size > 0, sessionId: run.sessionId }
+    if (run === undefined) return { running: false, waitingUser: false, waitingApproval: false, sessionId: null }
+    return {
+      running: true,
+      waitingUser: run.asks.size > 0,
+      waitingApproval: run.approvals.size > 0,
+      sessionId: run.sessionId,
+    }
   }
 
   /**
@@ -157,7 +174,9 @@ export class PumpSupervisor {
     if (this.disposed || this.runs.has(task.itemId)) return false
     const agents = this.ctx.get('agents') as AgentsFace | undefined
     if (agents === undefined) return false
-    const run: PumpRun = { task, sessionId: randomUUID(), handle: null, asks: new Set(), cancelled: false }
+    const run: PumpRun = {
+      task, sessionId: randomUUID(), handle: null, asks: new Set(), approvals: new Set(), cancelled: false,
+    }
     this.runs.set(task.itemId, run)
     this.bySession.set(run.sessionId, run)
     void this.drive(run, agents)

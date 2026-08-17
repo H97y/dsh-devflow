@@ -118,6 +118,8 @@ function itemBadges(item: DevflowItemView): JSX.Element[] {
     badges.push(<Badge key="run" tone="ok">{`执行中${item.note === null ? '' : `·${item.note}`}`}</Badge>)
   } else if (item.pumpWaitingUser) {
     badges.push(<Badge key="pw" tone="wait">泵代理等待你的应答</Badge>)
+  } else if (item.pumpWaitingApproval) {
+    badges.push(<Badge key="pwa" tone="wait">泵代理等待你的审批</Badge>)
   } else if (item.pumpRunning) {
     badges.push(<Badge key="pr" tone="ok">{`自动泵执行中${item.pumpSessionId === null ? '' : `·${item.pumpSessionId.slice(0, 8)}…`}`}</Badge>)
   } else if (item.note !== null) {
@@ -238,11 +240,21 @@ function ItemDetail({ item, remote, store, onArtifact, openSession }: {
           </div>
         )
         : null}
+      {item.pumpWaitingApproval
+        ? (
+          <div className={css.noticeInline}>
+            {`自动泵代理的审批请求正在独立会话（${item.pumpSessionId === null ? '' : `${item.pumpSessionId.slice(0, 8)}…`}）中等待你处理：`
+              + '打开该会话在审批弹窗里允许或拒绝（侧栏该会话同样亮起标记），处理后自动继续；也可「中断」改走面板决策。'}
+          </div>
+        )
+        : null}
       {jumpToPumpSession
         ? (
           <div className={css.actions}>
             <Button variant="ghost" size="sm" onClick={() => { openSession?.(item.pumpSessionId ?? '') }}>
-              {item.pumpWaitingUser ? '打开子会话作答' : '查看子会话'}
+              {item.pumpWaitingUser
+                ? '打开子会话作答'
+                : item.pumpWaitingApproval ? '打开子会话审批' : '查看子会话'}
             </Button>
             <span className={css.muted}>切换主会话框到该泵代理会话。</span>
           </div>
@@ -832,6 +844,7 @@ function Section({ title, items, selectedId, onSelect }: {
               {stage !== null ? <span>· {stage}</span> : null}
               {waiting ? <span className={css.rowWait}>· 待决策</span> : null}
               {item.pumpWaitingUser ? <span className={css.rowWait}>· 泵待你应答</span> : null}
+              {item.pumpWaitingApproval ? <span className={css.rowWait}>· 泵待你审批</span> : null}
               {item.running
                 ? <span className={css.rowRun}>· 执行中</span>
                 : item.pumpRunning ? <span className={css.rowRun}>· 自动泵执行中</span> : null}
@@ -964,11 +977,16 @@ export function DevflowPage({ store, remote, openSession }: {
   const done = items.filter(i => i.status === 'done')
   const busy = view !== null && view.busy
   const pumpWaiting = items.filter(i => i.pumpWaitingUser).length
+  const pumpApprovals = items.filter(i => i.pumpWaitingApproval).length
   // Optional chains: a pre-pump host (not yet restarted) serves views
   // without the pump field — the status line degrades to nothing instead
   // of crashing the whole shell.overlay slot entry.
+  const waitingTail = pumpWaiting > 0 || pumpApprovals > 0
+    ? `（${[pumpWaiting > 0 ? `${pumpWaiting} 待你应答` : '', pumpApprovals > 0 ? `${pumpApprovals} 待你审批` : '']
+      .filter(part => part !== '').join(' / ')}）`
+    : ''
   const pumpTail = view?.pump?.enabled === true
-    ? ` · 自动泵 ${view.pump.activeCount}/${view.pump.maxConcurrent}${pumpWaiting > 0 ? `（${pumpWaiting} 待你应答）` : ''}`
+    ? ` · 自动泵 ${view.pump.activeCount}/${view.pump.maxConcurrent}${waitingTail}`
     : ''
   const statusLine = snap.offline
     ? '连接已断开，重试中…'

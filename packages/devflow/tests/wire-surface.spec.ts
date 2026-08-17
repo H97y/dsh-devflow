@@ -58,7 +58,7 @@ describe('typert wire surface (regression: pump fields must survive the crossing
       waitingStage: null, stage: 'implement', round: 0, error: null,
       workspaceKind: 'worktree', workspacePath: '/w', workspaceBranch: 'b',
       resourceWaiting: null, reportFile: null,
-      pumpRunning: true, pumpWaitingUser: true, pumpSessionId: 'sess-1',
+      pumpRunning: true, pumpWaitingUser: true, pumpWaitingApproval: true, pumpSessionId: 'sess-1',
       log: [{ n: 1, note: 'x', at: 0 }],
     }
     const parsed = wire.result.schema.parse({
@@ -66,10 +66,11 @@ describe('typert wire surface (regression: pump fields must survive the crossing
       ignoredRoots: [], waitingTotal: 0,
       pump: { enabled: true, available: true, activeCount: 1, maxConcurrent: 2, model: null },
       items: [item],
-    }) as { pump?: { enabled: boolean }, items: { pumpRunning: boolean, pumpWaitingUser: boolean, pumpSessionId: string | null }[] }
+    }) as { pump?: { enabled: boolean }, items: { pumpRunning: boolean, pumpWaitingUser: boolean, pumpWaitingApproval: boolean, pumpSessionId: string | null }[] }
     expect(parsed.pump).toEqual({ enabled: true, available: true, activeCount: 1, maxConcurrent: 2, model: null })
     expect(parsed.items[0].pumpRunning).toBe(true)
     expect(parsed.items[0].pumpWaitingUser).toBe(true)
+    expect(parsed.items[0].pumpWaitingApproval).toBe(true)
     expect(parsed.items[0].pumpSessionId).toBe('sess-1')
   })
 })

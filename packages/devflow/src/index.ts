@@ -1963,7 +1963,8 @@ export class DevflowService extends TypertRemoteService {
             && pipe.workspace !== null && pipe.waiting === null && pipe.error === null) {
             note = pumpStatus.waitingUser
               ? '泵代理等待你的应答'
-              : pumpStatus.running ? '自动泵执行中' : '等待会话泵执行'
+              : pumpStatus.waitingApproval ? '泵代理等待你的审批'
+                : pumpStatus.running ? '自动泵执行中' : '等待会话泵执行'
           }
         }
         return {
@@ -1991,6 +1992,7 @@ export class DevflowService extends TypertRemoteService {
           reportFile: pipe?.files.report ?? null,
           pumpRunning: pumpStatus.running,
           pumpWaitingUser: pumpStatus.waitingUser,
+          pumpWaitingApproval: pumpStatus.waitingApproval,
           pumpSessionId: pumpStatus.sessionId,
           log: item.log.slice(-14),
         }

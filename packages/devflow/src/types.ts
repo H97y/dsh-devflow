@@ -228,6 +228,8 @@ export interface DevflowItemView {
   readonly pumpRunning: boolean
   /** True while that agent has an ask_user_question awaiting the human. */
   readonly pumpWaitingUser: boolean
+  /** True while that agent has an approval request awaiting the human. */
+  readonly pumpWaitingApproval: boolean
   /** The spawned agent's session id (panel hint / jump reference). */
   readonly pumpSessionId: string | null
   readonly log: readonly DevflowLogLine[]

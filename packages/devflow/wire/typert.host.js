@@ -199,6 +199,7 @@ const dsh_devflow_devflow_state_result$schema = z.object({
   'reportFile': z.union([z.literal(null), z.string()]).readonly(),
   'pumpRunning': z.boolean().readonly(),
   'pumpWaitingUser': z.boolean().readonly(),
+  'pumpWaitingApproval': z.boolean().readonly(),
   'pumpSessionId': z.union([z.literal(null), z.string()]).readonly(),
   'log': z.array(z.object({
   'n': z.number().readonly(),
@@ -245,7 +246,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_answer_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":548,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":551,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/artifact',
@@ -270,7 +271,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow#devflow/artifact:result',
         schema: dsh_devflow_devflow_artifact_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":643,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":646,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/cancel',
@@ -295,7 +296,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_cancel_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":576,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":579,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/config.get',
@@ -321,7 +322,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowSettingsView',
         schema: dsh_devflow_devflow_config_get_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":684,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":687,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/config.models',
@@ -347,7 +348,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow#devflow/config.models:result',
         schema: dsh_devflow_devflow_config_models_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":746,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":749,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/config.set',
@@ -373,7 +374,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowSettings',
         schema: dsh_devflow_devflow_config_set_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":709,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":712,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-add',
@@ -399,7 +400,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowProjectAddResult',
         schema: dsh_devflow_devflow_project_add_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":752,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":755,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-list-dir',
@@ -425,7 +426,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowDirListing',
         schema: dsh_devflow_devflow_project_list_dir_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":828,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":831,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-pick-capability',
@@ -441,7 +442,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowPickCapabilityResult',
         schema: dsh_devflow_devflow_project_pick_capability_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":799,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":802,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-pick-native',
@@ -457,7 +458,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowPickNativeResult',
         schema: dsh_devflow_devflow_project_pick_native_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":812,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":815,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-remove',
@@ -483,7 +484,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_project_remove_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":771,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":774,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-scan',
@@ -509,7 +510,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_project_scan_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":792,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":795,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/prompt-set',
@@ -535,7 +536,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_prompt_set_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":666,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":669,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/prompts',
@@ -560,7 +561,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowPromptsView',
         schema: dsh_devflow_devflow_prompts_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":657,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":660,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/resume',
@@ -585,7 +586,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_resume_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":612,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":615,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/retry',
@@ -610,7 +611,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_retry_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":626,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":629,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/state',
@@ -635,7 +636,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowView',
         schema: dsh_devflow_devflow_state_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":501,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":504,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/submit',
@@ -660,7 +661,7 @@ export const TYPERT = {
         typeSymbol: 'dsh-devflow/types#DevflowSubmitResult',
         schema: dsh_devflow_devflow_submit_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":516,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":519,"column":9},
     },
   ],
   model: {
@@ -831,7 +832,7 @@ export const TYPERT = {
           },
           {
             "name": "DevflowItemView",
-            "declaration": "export interface DevflowItemView {\n    readonly id: string;\n    readonly kind: 'requirement' | 'bug';\n    readonly title: string;\n    readonly status: DevflowItemStatus;\n    readonly size: DevflowSize | null;\n    readonly score: DevflowScore | null;\n    readonly running: boolean;\n    readonly note: string | null;\n    readonly preview: string;\n    readonly rejectReason: string;\n    readonly questions: readonly DevflowQuestion[] | null;\n    readonly waitingStage: DevflowStage | null;\n    readonly stage: DevflowStage | null;\n    readonly round: number;\n    readonly error: string | null;\n    readonly workspaceKind: 'main' | 'worktree' | null;\n    readonly workspacePath: string | null;\n    readonly workspaceBranch: string | null;\n    readonly resourceWaiting: 'workspace' | 'worktree' | null;\n    readonly reportFile: string | null;\n    readonly pumpRunning: boolean;\n    readonly pumpWaitingUser: boolean;\n    readonly pumpSessionId: string | null;\n    readonly log: readonly DevflowLogLine[];\n}"
+            "declaration": "export interface DevflowItemView {\n    readonly id: string;\n    readonly kind: 'requirement' | 'bug';\n    readonly title: string;\n    readonly status: DevflowItemStatus;\n    readonly size: DevflowSize | null;\n    readonly score: DevflowScore | null;\n    readonly running: boolean;\n    readonly note: string | null;\n    readonly preview: string;\n    readonly rejectReason: string;\n    readonly questions: readonly DevflowQuestion[] | null;\n    readonly waitingStage: DevflowStage | null;\n    readonly stage: DevflowStage | null;\n    readonly round: number;\n    readonly error: string | null;\n    readonly workspaceKind: 'main' | 'worktree' | null;\n    readonly workspacePath: string | null;\n    readonly workspaceBranch: string | null;\n    readonly resourceWaiting: 'workspace' | 'worktree' | null;\n    readonly reportFile: string | null;\n    readonly pumpRunning: boolean;\n    readonly pumpWaitingUser: boolean;\n    readonly pumpWaitingApproval: boolean;\n    readonly pumpSessionId: string | null;\n    readonly log: readonly DevflowLogLine[];\n}"
           },
           {
             "name": "DevflowLogLine",
