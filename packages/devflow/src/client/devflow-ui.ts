@@ -11,8 +11,8 @@
 
 import { useSyncExternalStore } from 'react'
 import type {
-  DevflowAnswer, DevflowDirListing, DevflowPickCapabilityResult, DevflowPromptsView,
-  DevflowProjectAddResult, DevflowView,
+  DevflowAnswer, DevflowDirListing, DevflowModelInfo, DevflowPickCapabilityResult,
+  DevflowPromptsView, DevflowProjectAddResult, DevflowSettings, DevflowView,
 } from '../types.ts'
 
 /**
@@ -69,6 +69,9 @@ export interface DevflowRemote {
   'project-pick-capability'(): Promise<RemoteResult<DevflowPickCapabilityResult>>
   'project-pick-native'(): Promise<RemoteResult<{ path: string | null }>>
   'project-list-dir'(request: { path: string | null }): Promise<RemoteResult<DevflowDirListing>>
+  'config.get'(request: { project: string | null }): Promise<RemoteResult<{ settings: DevflowSettings; warnings: readonly string[] }>>
+  'config.set'(request: { project: string | null; settings: DevflowSettings }): Promise<RemoteResult<DevflowSettings>>
+  'config.models'(request: { project: string | null }): Promise<RemoteResult<readonly DevflowModelInfo[]>>
 }
 
 /** Render an unknown error value as short text without String(anything). */

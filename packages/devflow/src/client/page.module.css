@@ -649,3 +649,19 @@
 .dirRowDim {
   color: var(--dsw-alias-label-secondary);
 }
+
+/* ── Settings pane ─────────────────────────────────────────────────── */
+
+.settingsRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingsLabel {
+  flex-shrink: 0;
+  width: 110px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
