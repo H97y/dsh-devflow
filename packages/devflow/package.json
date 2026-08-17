@@ -1,7 +1,7 @@
 {
   "name": "dsh-devflow",
   "description": "Automated development pipeline for DeepSeek Harness: requirement pool, LLM-driven refine/design/plan/review stages, per-stage waiting queues, workspace-routed implementation pump, and a browser control panel",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publishConfig": {
     "access": "public"
   },
