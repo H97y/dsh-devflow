@@ -49,17 +49,47 @@ pnpm sync:profile                         # link 进 profile（首次/组合变�
 （`@deepseek-ai/dsh-devflow` → `dsh-devflow`）后提交回本仓库；等 npm 版本追平
 checkout 后可改为直接依赖 npm 包。
 
-## 安装（最终用户）
+## 快速上手（安装与首次使用）
 
-发布到 npm 后，一条命令完成依赖安装与组合接线（`dsh.bundle` manifest + 包内
-`cordis.patch.yml` 自动生效）：
+> **发布状态**：`dsh-devflow` 尚未发布到 npm（发布前置条件见「发布路径」节）。
+> 在发布之前，外部用户请走下方「方式 B：从源码安装」。
+
+### 前置条件
+
+- 已安装 DeepSeek Harness CLI（`npm i -g @deepseek-ai/dsh`，rc 系列即可）并能运行
+  `dsh web`；插件使用的 `sidebar.footer.action` 插槽需要较新的 rc 版本
+- profile 使用的插件安装器是 pnpm（随 dsh 初始化）
+
+### 方式 A：npm 安装（发布后可用，推荐）
+
+一条命令完成依赖安装与组合接线（`dsh.bundle` manifest + 包内 `cordis.patch.yml`
+自动生效，`@deepseek-ai/*` peer 依赖由 pnpm 自动解析，无需手动处理）：
 
 ```bash
 dsh plugin --profile web add dsh-devflow
 ```
 
-`root` 默认取进程工作目录；如需指向特定工作区，在你自己的 profile patch 层
-覆盖（`~/.dsh/profiles/web/cordis.patch.yml`）：
+### 方式 B：从源码安装（当前可用；需要本地 deepseek-harness checkout）
+
+运行时依赖与构建期类型当前以 `link:` 指向本地 harness checkout（见「开发回路」
+节），因此克隆本仓库后需把 `packages/devflow/package.json` 中的 link 路径改为
+你的 checkout 路径，再构建并 link 进 profile：
+
+```bash
+git clone https://github.com/H97y/dsh-devflow.git
+cd dsh-devflow
+# 编辑 packages/devflow/package.json：把 link:/Users/heyue/deepseek-harness/...
+#   改为 link:<你的-harness-checkout>/...（构建期类型解析也需要它）
+pnpm install && pnpm build && pnpm test
+pnpm sync:profile        # link 进 ~/.dsh/profiles/web（DSH_PROFILE 可换 profile）
+```
+
+> 无本地 harness checkout 的用户请等待 npm 发布（方式 A）。
+
+### 配置工作区
+
+`root` 默认取进程工作目录；如需指向特定工作区，在你的 profile patch 层
+（`~/.dsh/profiles/web/cordis.patch.yml`）覆盖：
 
 ```yaml
 - id: devflow
@@ -71,20 +101,25 @@ dsh plugin --profile web add dsh-devflow
     # tickIntervalMs: 2000          # 状态机节拍（默认 2000）
 ```
 
-npm 发布前的手动等效安装：
+### 验证与首次使用
 
-```bash
-cd ~/.dsh/profiles/web
-pnpm add dsh-devflow
-```
+1. （首次安装或组合变化后）重启 `dsh web`，浏览器打开 Web 界面
+2. **验证挂载**：侧边栏底部、「设置」按钮上方出现「开发流水线」入口（侧边栏
+   折叠时是 56px 轨道圆钮）——没有即未挂载，见下方排查
+3. 点击入口打开主区域工作台；在「需求池入口」粘贴一句粗浅需求（如
+   「给列表加个搜索框」）→「投入需求池」
+4. 后台自动开始：批量精炼（含规模评估）→ 择优 → 设计 → 计划 → 评审修订 →
+   实施（`devflow` 模型工具由会话泵调用）→ 代码评审 → Web 验证 → 合并回 main → 报告；
+   需要你拍板的会停在「等待队列」，页面上作答后自动续跑
+5. 全部状态在 `<root>/.devflow/`，进程重启不丢
 
-并在 `cordis.patch.yml` 增加插入行：
+### 故障排查
 
-```yaml
-- insert:
-    - id: devflow
-      name: dsh-devflow
-```
+| 现象 | 处理 |
+|---|---|
+| 侧边栏没有「开发流水线」入口 | 重启 `dsh web`；仍无则 `curl -s http://127.0.0.1:3080/ \| grep -o 'dsh-devflow[^"]*'` 看启动名单里是否有本包，没有则检查 profile 是否装上（`~/.dsh/profiles/web/node_modules/dsh-devflow`）与 `cordis.patch.yml` 插入行 |
+| 页面打开但状态栏报连接错误 | 宿主半边未挂载：确认组合行 `name: dsh-devflow` 与安装的包名一致 |
+| 找不到 `.devflow/` 目录 | 它在 `root` 配置下（默认 `dsh web` 的启动目录）；按「配置工作区」显式指定 |
 
 浏览器界面分两处挂载：入口按钮注册在 `sidebar.footer.action`（侧边栏底部、
 与"设置"同层级，样式对齐原生触发行，折叠时为 56px 轨道圆钮，带待决策计数徽标）；
