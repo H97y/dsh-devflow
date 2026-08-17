@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@deepseek-ai/dsh-devflow':
+        specifier: link:./packages/devflow
+        version: link:packages/devflow
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
@@ -51,6 +54,12 @@ importers:
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: link:/Users/heyue/deepseek-harness/packages/client/ui-layout
         version: link:../../../../deepseek-harness/packages/client/ui-layout
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: link:/Users/heyue/deepseek-harness/packages/client/ui-primitives
+        version: link:../../../../deepseek-harness/packages/client/ui-primitives
+      '@deepseek-ai/dsh-client-ui-sidebar':
+        specifier: link:/Users/heyue/deepseek-harness/packages/client/ui-sidebar
+        version: link:../../../../deepseek-harness/packages/client/ui-sidebar
       '@deepseek-ai/dsh-fs':
         specifier: link:/Users/heyue/deepseek-harness/packages/fs/fs
         version: link:../../../../deepseek-harness/packages/fs/fs

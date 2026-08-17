@@ -25,6 +25,8 @@
     "src/prompts.ts",
     "src/types.ts",
     "src/client/index.ts",
-    "src/client/panel.tsx"
+    "src/client/devflow-ui.ts",
+    "src/client/trigger.tsx",
+    "src/client/page.tsx"
   ]
 }

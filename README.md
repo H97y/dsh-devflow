@@ -14,7 +14,7 @@ DeepSeek Harness 的自动开发流水线插件：需求池 → LLM 批量精炼
 │   ├── src/index.ts           # 宿主服务：状态机 + LLM 阶段 + devflow 模型工具
 │   ├── src/prompts.ts         # 9 阶段默认提示词 + {{变量}} 渲染
 │   ├── src/types.ts           # 公共类型
-│   ├── src/client/            # 浏览器面板（shell.overlay 挂载）
+│   ├── src/client/            # 浏览器界面（侧边栏入口 + 主区域页面）
 │   └── lib/typert.*           # vendored wire 工件（见下）
 └── scripts/
     ├── tsdown.client.ts       # vendored 自 harness 的浏览器 bundle 预设
@@ -59,8 +59,14 @@ pnpm add dsh-devflow
         # tickIntervalMs: 2000          # 状态机节拍（默认 2000）
 ```
 
-浏览器面板挂在 `shell.overlay`（右下角）；模型工具 `devflow`（`next` / `report`）
-由会话泵调用以执行 implement / fix-code / verify / merge 任务。
+浏览器界面分两处挂载：入口按钮注册在 `sidebar.footer.action`（侧边栏底部、
+与"设置"同层级，样式对齐原生触发行，折叠时为 56px 轨道圆钮，带待决策计数徽标）；
+点击后在 `shell.overlay` 打开主区域整页（锚定侧边栏右缘、随拖拽/折叠自适应，
+左列需求池 + 右侧详情/产物/提示词编辑的双栏布局，Esc 逐级返回）。浏览器半边
+自行 `$mount` 本包生成的 `/remote` 产物——`remote.devflow` 命名空间由插件自己
+挂载，不依赖宿主装配接线，npm 安装路径即装即用。模型工具 `devflow`
+（`next` / `report`）由会话泵调用以执行 implement / fix-code / verify / merge
+任务。
 
 ## 发布路径
 

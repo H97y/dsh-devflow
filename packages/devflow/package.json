@@ -48,6 +48,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-api-remotes"
       ],
       "platform": "web"
@@ -55,7 +56,7 @@
   },
   "scripts": {
     "build:types": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
-    "build": "pnpm run build:types && tsdown && cp wire/typert.*.js wire/typert.*.d.ts lib/",
+    "build": "cp wire/typert.host.js wire/typert.host.d.ts wire/typert.remote-client.js wire/typert.remote-client.d.ts lib/ && pnpm run build:types && tsdown",
     "test": "vitest run",
     "watch": "tsdown --watch"
   },
@@ -71,6 +72,8 @@
     "@deepseek-ai/dsh-api-remotes": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-client-runtime": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-client-ui-layout": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-fs": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-invariants": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1",
@@ -86,6 +89,8 @@
     "@deepseek-ai/dsh-api-remotes": "link:/Users/heyue/deepseek-harness/packages/api/remotes",
     "@deepseek-ai/dsh-client-runtime": "link:/Users/heyue/deepseek-harness/packages/client/runtime",
     "@deepseek-ai/dsh-client-ui-layout": "link:/Users/heyue/deepseek-harness/packages/client/ui-layout",
+    "@deepseek-ai/dsh-client-ui-primitives": "link:/Users/heyue/deepseek-harness/packages/client/ui-primitives",
+    "@deepseek-ai/dsh-client-ui-sidebar": "link:/Users/heyue/deepseek-harness/packages/client/ui-sidebar",
     "@deepseek-ai/dsh-fs": "link:/Users/heyue/deepseek-harness/packages/fs/fs",
     "@deepseek-ai/dsh-invariants": "link:/Users/heyue/deepseek-harness/packages/runtime-diagnostics/invariants",
     "@deepseek-ai/dsh-llm": "link:/Users/heyue/deepseek-harness/packages/llm/llm",

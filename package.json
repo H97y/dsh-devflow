@@ -8,6 +8,7 @@
     "sync:harness": "bash scripts/sync-to-harness.sh"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-devflow": "link:./packages/devflow",
     "@types/node": "^24.0.0",
     "lightningcss": "^1.32.0",
     "tsdown": "^0.22.2",

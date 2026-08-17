@@ -1,0 +1,88 @@
+/* Sidebar-foot trigger: mirrors the settings trigger rhythm (34px compact
+ * row / 36px rail circle) so the two foot controls read as one native group.
+ * The shell's footerActions container owns placement; this button owns its
+ * geometry and hover chrome, per the slot contract. */
+
+.trigger,
+.rail {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+/* Wide row: the settings trigger's compact vertical rhythm. */
+.trigger {
+  gap: 8px;
+  width: calc(100% + 8px);
+  height: 34px;
+  margin: 4px -4px 4px;
+  padding: 6px 2px 6px 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* Rail circle: the same 36x36 box as the other rail controls. */
+.rail {
+  width: 36px;
+  height: 36px;
+  margin: 8px 0 10px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.trigger:hover,
+.rail:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Open page keeps the trigger pressed, like a persistent selection. */
+.active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.label {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Waiting-decision count pill (wide row): right-aligned, neutral chrome. */
+.badge {
+  flex: none;
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Count pill on the rail circle: pinned to the circle's top-right corner. */
+.railBadge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-warn-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+}
