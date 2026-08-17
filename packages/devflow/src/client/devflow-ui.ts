@@ -88,8 +88,18 @@ export interface DevflowUiSnapshot {
   readonly offline: boolean
 }
 
-/** Poll cadence; the panel already refreshed at this rate. */
+/**
+ * Poll cadence while the main-area page is open: the workbench reads live
+ * (item moving between stages, logs appending), so it needs the fast rate.
+ */
 const POLL_MS = 1500
+
+/**
+ * Poll cadence while only the sidebar trigger is mounted (page closed): the
+ * badge just counts the waiting queue, where seconds of latency are
+ * invisible — 10s keeps it fresh at ~1/7th the request volume.
+ */
+const POLL_IDLE_MS = 10_000
 
 /**
  * Client UI store: open flag plus the polled panel projection of the active
@@ -127,17 +137,20 @@ export class DevflowUiStore {
   open(): void {
     if (this.#snap.open) return
     this.#emit(true, this.#snap.view, this.#snap.offline)
+    this.#applyCadence()
   }
 
   /** Close the main-area page. */
   close(): void {
     if (!this.#snap.open) return
     this.#emit(false, this.#snap.view, this.#snap.offline)
+    this.#applyCadence()
   }
 
   /** Toggle the main-area page (the sidebar-foot trigger's click action). */
   toggle(): void {
     this.#emit(!this.#snap.open, this.#snap.view, this.#snap.offline)
+    this.#applyCadence()
   }
 
   /**
@@ -164,14 +177,29 @@ export class DevflowUiStore {
 
   #startPolling(): void {
     this.#poll()
-    this.#timer = window.setInterval(() => { this.#poll() }, POLL_MS)
+    // Arm directly (NOT via #applyCadence — its un-armed guard is for the
+    // open/close transitions and would wrongly no-op at subscription time,
+    // leaving the store with no interval at all).
+    this.#timer = setInterval(() => { this.#poll() }, this.#cadenceMs())
   }
 
   #stopPolling(): void {
     if (this.#timer !== undefined) {
-      window.clearInterval(this.#timer)
+      clearInterval(this.#timer)
       this.#timer = undefined
     }
+  }
+
+  /** (Re)arm the interval for the current cadence: fast while the page is
+   * open, idle-slow while only the badge-bearing trigger is mounted. */
+  #applyCadence(): void {
+    if (this.#timer === undefined) return // nobody subscribed; nothing to arm
+    this.#stopPolling()
+    this.#timer = setInterval(() => { this.#poll() }, this.#cadenceMs())
+  }
+
+  #cadenceMs(): number {
+    return this.#snap.open ? POLL_MS : POLL_IDLE_MS
   }
 
   #poll(): void {
