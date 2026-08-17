@@ -209,16 +209,19 @@ function Questions({ item, onAnswer }: {
 }
 
 /** The selected item's full detail (right pane's default mode). */
-function ItemDetail({ item, remote, store, onArtifact }: {
+function ItemDetail({ item, remote, store, onArtifact, openSession }: {
   item: DevflowItemView
   remote: DevflowRemote
   store: DevflowUiStore
   onArtifact: (itemId: string, name: 'design' | 'plan' | 'report' | 'reviews') => void
+  /** Jump to the pump agent's session (undefined → affordance hidden). */
+  openSession: ((id: string) => void) | undefined
 }): JSX.Element {
   const [showLog, setShowLog] = useState(false)
   const call = useCallback((action: Promise<RemoteResult<unknown>>): void => {
     callRemote(action).then(() => { store.refresh() }, () => undefined).catch(() => undefined)
   }, [store])
+  const jumpToPumpSession = openSession !== undefined && item.pumpSessionId !== null
   return (
     <div className={css.detailBody}>
       <div className={css.detailTitle}>{item.title}</div>
@@ -231,7 +234,17 @@ function ItemDetail({ item, remote, store, onArtifact }: {
         ? (
           <div className={css.noticeInline}>
             {`自动泵代理正在独立会话（${item.pumpSessionId === null ? '' : `${item.pumpSessionId.slice(0, 8)}…`}）中等待你的答复：`
-              + '在 Web 界面收到的问题弹窗里作答，或从会话列表打开该会话（侧栏会亮起待答标记）。作答后自动继续；也可「中断」改走面板决策。'}
+              + '在 Web 界面收到的问题弹窗里作答，或打开该会话直接作答（侧栏同样会亮起待答标记）。作答后自动继续；也可「中断」改走面板决策。'}
+          </div>
+        )
+        : null}
+      {jumpToPumpSession
+        ? (
+          <div className={css.actions}>
+            <Button variant="ghost" size="sm" onClick={() => { openSession?.(item.pumpSessionId ?? '') }}>
+              {item.pumpWaitingUser ? '打开子会话作答' : '查看子会话'}
+            </Button>
+            <span className={css.muted}>切换主会话框到该泵代理会话。</span>
           </div>
         )
         : null}
@@ -845,9 +858,11 @@ type Pane =
  * @param props.remote - the generated Remote namespace.
  * @returns the page element tree (null while closed).
  */
-export function DevflowPage({ store, remote }: {
+export function DevflowPage({ store, remote, openSession }: {
   store: DevflowUiStore
   remote: DevflowRemote
+  /** Jump to a pump agent's session (undefined → affordance hidden). */
+  openSession?: (id: string) => void
 }): JSX.Element | null {
   const snap = useDevflowUi(store)
   const view = snap.view
@@ -1085,6 +1100,7 @@ export function DevflowPage({ store, remote }: {
                     remote={remote}
                     store={store}
                     onArtifact={openArtifact}
+                    openSession={openSession}
                   />
                 )
                 : (
@@ -1097,6 +1113,6 @@ export function DevflowPage({ store, remote }: {
 }
 
 /** Element factory for the .ts registration entry (no JSX at that side). */
-export function renderPage(store: DevflowUiStore, remote: DevflowRemote): JSX.Element {
-  return <DevflowPage store={store} remote={remote} />
+export function renderPage(store: DevflowUiStore, remote: DevflowRemote, openSession?: (id: string) => void): JSX.Element {
+  return <DevflowPage store={store} remote={remote} openSession={openSession} />
 }

@@ -48,6 +48,15 @@ interface RemoteMountFace {
 }
 
 /**
+ * The sessions-service slice this plugin calls: switching the main
+ * conversation onto a pump agent's session. Optional at runtime — a host
+ * without the service simply hides the jump affordance.
+ */
+interface SessionsOpenFace {
+  open(id: string): void
+}
+
+/**
  * Mount this package's Remote namespace, then register the sidebar-foot
  * trigger and the main-area page.
  * @param ctx - client Cordis context.
@@ -62,12 +71,27 @@ export async function apply(ctx: Context): Promise<void> {
   }
   const store = new DevflowUiStore(remote)
   ctx.effect(() => () => { store.dispose() }, 'devflow.ui store')
+  // Session jump for pump agents: close the full-area overlay first so the
+  // conversation it hands over to is actually visible, then select the child
+  // session. `open` fails loud on unknown ids — a run settling between poll
+  // and click is a normal race, so it degrades to a silent no-op.
+  const sessions = ctx.get('sessions') as SessionsOpenFace | undefined
+  const openSession = sessions === undefined
+    ? undefined
+    : (id: string): void => {
+      store.close()
+      try {
+        sessions.open(id)
+      } catch {
+        // settled/removed meanwhile; the next poll drops the affordance
+      }
+    }
   ctx.effect(() => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
     { name: 'sidebar.footer.action', id: 'devflow-trigger', order: 10, label: '自动开发流水线' },
     (props: { wide: boolean }) => renderTrigger(store, props.wide),
   )), 'devflow.trigger')
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register(
     { name: 'shell.overlay', id: 'devflow-page', order: 80, label: '自动开发流水线' },
-    () => renderPage(store, remote),
+    () => renderPage(store, remote, openSession),
   )), 'devflow.page')
 }

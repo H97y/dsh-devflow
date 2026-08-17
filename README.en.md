@@ -150,8 +150,11 @@ task by task — no parked pump session required —
 - **Agents genuinely wait when they need you**: a pump agent runs in a real
   session, so its `ask_user_question` call suspends and the question is
   broadcast to the Web UI (the sidebar lights up that session), while the
-  panel card is marked as waiting for your answer. Answering resumes the
-  run. When the ask tool is unavailable, the agent falls back to
+  panel card is marked as waiting for your answer and gains an "open child
+  session" button — one click collapses the panel and switches the main
+  conversation onto that agent's session to answer inline (a "view child
+  session" jump exists while it runs, too). Answering resumes the run.
+  When the ask tool is unavailable, the agent falls back to
   `devflow report questions` and the panel's waiting queue.
 - **Security boundary**: the agent's sandbox is pinned at creation to
   `workspace-write @ project root` — it cannot widen itself; approval
