@@ -113,6 +113,16 @@ pnpm sync:profile        # link 进 ~/.dsh/profiles/web（DSH_PROFILE 可换 pro
 或恢复；手动添加与隐藏记录持久化在 `<root>/.devflow/projects.json`。需求 id 内嵌项目
 key（`<key>-r<n>`），面板操作与会话泵回填都据此自动路由。
 
+### 阶段模型配置
+
+工作台头部「设置」打开统一设置面板：每个流水线阶段（精炼/设计/计划/评审/代码评审/报告）
+可单独指定模型，候选列表只读自 harness 已配置模型（插件不管理任何 API key）。未配置的
+阶段回退 harness 当前模型；已配置模型被 harness 移除时运行时回退并在面板标记「已漂移」。
+修改保存后即时生效，持久化在 `<root>/.devflow/settings.json`（运行时状态，git 不跟踪）。
+
+注意重置语义：**删除 settings.json 会重新导入旧配置而非重置为默认**；重置请直接把文件
+内容编辑为 `{"version":1,"stageModels":{}}`。
+
 ### 验证与首次使用
 
 1. （首次安装或组合变化后）重启 `dsh web`，浏览器打开 Web 界面
