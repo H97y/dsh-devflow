@@ -18,7 +18,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   DevflowAnswer, DevflowDirListing, DevflowItemView, DevflowModelInfo,
-  DevflowPromptsView, DevflowQuestion, DevflowSettings, DevflowSettingsView,
+  DevflowPromptsView, DevflowPumpView, DevflowQuestion, DevflowSettings, DevflowSettingsView,
   DevflowView,
 } from '../types.ts'
 import type { DevflowRemote, DevflowUiStore, RemoteResult } from './devflow-ui.ts'
@@ -116,6 +116,10 @@ function itemBadges(item: DevflowItemView): JSX.Element[] {
   }
   if (item.running) {
     badges.push(<Badge key="run" tone="ok">{`执行中${item.note === null ? '' : `·${item.note}`}`}</Badge>)
+  } else if (item.pumpWaitingUser) {
+    badges.push(<Badge key="pw" tone="wait">泵代理等待你的应答</Badge>)
+  } else if (item.pumpRunning) {
+    badges.push(<Badge key="pr" tone="ok">{`自动泵执行中${item.pumpSessionId === null ? '' : `·${item.pumpSessionId.slice(0, 8)}…`}`}</Badge>)
   } else if (item.note !== null) {
     badges.push(<Badge key="note" tone="wait">{`暂停·${item.note}`}</Badge>)
   }
@@ -223,6 +227,14 @@ function ItemDetail({ item, remote, store, onArtifact }: {
       {item.questions !== null && item.status !== 'paused'
         ? <Questions item={item} onAnswer={async (itemId, stage, answers) => { call(remote.answer({ itemId, stage, answers })) }} />
         : null}
+      {item.pumpWaitingUser
+        ? (
+          <div className={css.noticeInline}>
+            {`自动泵代理正在独立会话（${item.pumpSessionId === null ? '' : `${item.pumpSessionId.slice(0, 8)}…`}）中等待你的答复：`
+              + '在 Web 界面收到的问题弹窗里作答，或从会话列表打开该会话（侧栏会亮起待答标记）。作答后自动继续；也可「中断」改走面板决策。'}
+          </div>
+        )
+        : null}
       {item.error !== null
         ? (
           <div className={css.errorRow}>
@@ -303,10 +315,12 @@ function ArtifactPane({ title, text, onBack }: {
   )
 }
 
-/** Unified settings pane (right pane mode): per-stage model overrides. */
-function SettingsPane({ remote, project, onBack }: {
+/** Unified settings pane (right pane mode): per-stage models + auto-pump. */
+function SettingsPane({ remote, project, pumpStatus, onBack }: {
   remote: DevflowRemote
   project: string | null
+  /** Live auto-pump projection from the polled view (status line only). */
+  pumpStatus: DevflowPumpView | null
   onBack: () => void
 }): JSX.Element {
   const [settings, setSettings] = useState<DevflowSettings | null>(null)
@@ -316,6 +330,8 @@ function SettingsPane({ remote, project, onBack }: {
   const [status, setStatus] = useState('')
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<Record<string, string>>({})
+  const [pumpOn, setPumpOn] = useState(false)
+  const [pumpModel, setPumpModel] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -328,6 +344,8 @@ function SettingsPane({ remote, project, onBack }: {
       setSettings(view.settings)
       setWarnings(view.warnings)
       setDraft({ ...view.settings.stageModels })
+      setPumpOn(view.settings.pump?.enabled === true)
+      setPumpModel(view.settings.pump?.model ?? '')
     }, (error: unknown) => {
       if (!cancelled) setStatus(`加载失败: ${errorText(error)}`)
     }).catch(() => undefined)
@@ -349,18 +367,21 @@ function SettingsPane({ remote, project, onBack }: {
     const next: DevflowSettings = {
       version: 1,
       stageModels: Object.fromEntries(Object.entries(draft).filter(([, v]) => v !== '')),
+      pump: { enabled: pumpOn, model: pumpModel },
     }
     callRemote(remote['config.set']({ project, settings: next })).then((saved: DevflowSettings) => {
       setSaving(false)
       setSettings(saved)
       setDraft({ ...saved.stageModels })
+      setPumpOn(saved.pump?.enabled === true)
+      setPumpModel(saved.pump?.model ?? '')
       setWarnings([])
       setStatus('已保存 ✓ 即时生效')
     }, (error: unknown) => {
       setSaving(false)
       setStatus(`保存失败: ${errorText(error)}`)
     }).catch(() => undefined)
-  }, [remote, project, settings, draft])
+  }, [remote, project, settings, draft, pumpOn, pumpModel])
 
   // Three-state degradation (D21): empty catalog, call failure, and drift
   // are distinct conditions and must not be conflated.
@@ -372,14 +393,14 @@ function SettingsPane({ remote, project, onBack }: {
     <div className={css.pane}>
       <div className={css.paneHead}>
         <Button variant="ghost" size="sm" icon={<IconChevronLeftOutline14 size={14} />} onClick={onBack}>返回</Button>
-        <b className={css.paneTitle}>设置 · 阶段模型</b>
+        <b className={css.paneTitle}>设置 · 阶段模型 / 自动泵</b>
       </div>
       <div className={css.paneScroll}>
         {warnings.map((warning, index) => (
           <div key={index} className={css.errorText}>{`⚠ ${warning}`}</div>
         ))}
         <div className={css.muted}>
-          未配置的阶段使用 harness 当前模型；候选只读自 harness 已配置模型。实施 / 修复 / Web 验证 / 合并阶段由会话泵执行，模型跟随当前会话，不在此配置。
+          未配置的阶段使用 harness 当前模型；候选只读自 harness 已配置模型。
         </div>
         {modelsError !== ''
           ? <div className={css.errorText}>{`⚠ 模型列表加载失败: ${modelsError}`}</div>
@@ -405,6 +426,44 @@ function SettingsPane({ remote, project, onBack }: {
               : null}
           </div>
         ))}
+        <div className={css.sectionTitle}>自动泵（工具阶段无人值守执行）</div>
+        {pumpStatus !== null && !pumpStatus.available
+          ? <div className={css.errorText}>⚠ 宿主未组装 agents 服务，自动泵不可用（实施/修复/验证/合并仍可手动泵）。</div>
+          : null}
+        <div className={css.muted}>
+          开启后，实施 / 修复 / Web 验证 / 合并阶段由插件直接派出的独立 agent 会话执行，无需专门挂一个泵会话；
+          agent 需要拍板时会在该会话里提问并等待你的答复（面板与侧栏均会亮起待答标记）。
+          {pumpStatus !== null
+            ? `当前：${pumpStatus.activeCount}/${pumpStatus.maxConcurrent} 个代理运行中（并发上限为部署配置）。`
+            : ''}
+        </div>
+        <div className={css.settingsRow}>
+          <label className={css.settingsLabel}>自动泵</label>
+          <Button
+            variant={pumpOn ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => { setPumpOn(!pumpOn) }}
+          >
+            {pumpOn ? '已开启' : '已关闭'}
+          </Button>
+          <span className={css.muted}>关闭后进行中的任务会跑完，不再派新代理。</span>
+        </div>
+        <div className={css.settingsRow}>
+          <label className={css.settingsLabel}>泵代理模型</label>
+          <select
+            className={css.select}
+            value={pumpModel}
+            onChange={(event) => { setPumpModel(event.target.value) }}
+          >
+            <option value="">（跟随 harness 当前模型）</option>
+            {(models ?? []).map(model => (
+              <option key={model.id} value={model.id}>{model.label}</option>
+            ))}
+          </select>
+          {stale(pumpModel)
+            ? <span className={css.errorText}>已漂移，将回退当前模型</span>
+            : null}
+        </div>
         <div className={css.actions}>
           <Button variant="primary" size="sm" disabled={saving || settings === null} onClick={() => { save() }}>
             {saving ? '保存中…' : '保存'}
@@ -759,7 +818,10 @@ function Section({ title, items, selectedId, onSelect }: {
               <span>{STATUS[item.status] ?? item.status}</span>
               {stage !== null ? <span>· {stage}</span> : null}
               {waiting ? <span className={css.rowWait}>· 待决策</span> : null}
-              {item.running ? <span className={css.rowRun}>· 执行中</span> : null}
+              {item.pumpWaitingUser ? <span className={css.rowWait}>· 泵待你应答</span> : null}
+              {item.running
+                ? <span className={css.rowRun}>· 执行中</span>
+                : item.pumpRunning ? <span className={css.rowRun}>· 自动泵执行中</span> : null}
             </div>
           </button>
         )
@@ -886,13 +948,20 @@ export function DevflowPage({ store, remote }: {
   const rejected = items.filter(i => i.status === 'rejected')
   const done = items.filter(i => i.status === 'done')
   const busy = view !== null && view.busy
+  const pumpWaiting = items.filter(i => i.pumpWaitingUser).length
+  // Optional chains: a pre-pump host (not yet restarted) serves views
+  // without the pump field — the status line degrades to nothing instead
+  // of crashing the whole shell.overlay slot entry.
+  const pumpTail = view?.pump?.enabled === true
+    ? ` · 自动泵 ${view.pump.activeCount}/${view.pump.maxConcurrent}${pumpWaiting > 0 ? `（${pumpWaiting} 待你应答）` : ''}`
+    : ''
   const statusLine = snap.offline
     ? '连接已断开，重试中…'
     : view?.note != null
       ? view.note
       : view === null
         ? '…'
-        : `${active.length} 进行中 · ${waiting.length} 待决策 · ${done.length} 已完成`
+        : `${active.length} 进行中 · ${waiting.length} 待决策 · ${done.length} 已完成${pumpTail}`
 
   return (
     <div
@@ -997,7 +1066,14 @@ export function DevflowPage({ store, remote }: {
         </aside>
         <main className={css.detail}>
           {pane.kind === 'settings'
-            ? <SettingsPane remote={remote} project={view?.project ?? null} onBack={() => { setPane({ kind: 'item' }) }} />
+            ? (
+              <SettingsPane
+                remote={remote}
+                project={view?.project ?? null}
+                pumpStatus={view?.pump ?? null}
+                onBack={() => { setPane({ kind: 'item' }) }}
+              />
+            )
             : pane.kind === 'prompts'
             ? <PromptPane remote={remote} project={view?.project ?? null} onBack={() => { setPane({ kind: 'item' }) }} />
             : pane.kind === 'artifact'

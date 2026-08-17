@@ -224,7 +224,27 @@ export interface DevflowItemView {
   readonly workspaceBranch: string | null
   readonly resourceWaiting: 'workspace' | 'worktree' | null
   readonly reportFile: string | null
+  /** True while a host-spawned auto-pump agent owns this item's tool stage. */
+  readonly pumpRunning: boolean
+  /** True while that agent has an ask_user_question awaiting the human. */
+  readonly pumpWaitingUser: boolean
+  /** The spawned agent's session id (panel hint / jump reference). */
+  readonly pumpSessionId: string | null
   readonly log: readonly DevflowLogLine[]
+}
+
+/** Auto-pump projection for the panel (per viewed project). */
+export interface DevflowPumpView {
+  /** Whether this project's settings enable host-spawned pump agents. */
+  readonly enabled: boolean
+  /** False when the host lacks the agents service (auto-pump impossible). */
+  readonly available: boolean
+  /** Live spawned runs for this project (waiting-user ones included). */
+  readonly activeCount: number
+  /** Deployment-wide concurrent-run cap (composition config). */
+  readonly maxConcurrent: number
+  /** Effective `${provider}/${model}` route, or null = harness-active. */
+  readonly model: string | null
 }
 
 /** Whole panel projection: one project's items plus the project directory. */
@@ -240,6 +260,8 @@ export interface DevflowView {
   readonly ignoredRoots: readonly string[]
   /** Waiting-queue total across every loaded project (trigger badge). */
   readonly waitingTotal: number
+  /** Auto-pump status of the viewed project. */
+  readonly pump: DevflowPumpView
   readonly items: readonly DevflowItemView[]
 }
 
@@ -320,6 +342,14 @@ export interface DevflowSettings {
   readonly version: 1
   /** StageId → `${provider}/${model}`; absent stages fall back to the harness model. */
   readonly stageModels: { readonly [stage: string]: string }
+  /**
+   * Auto-pump section (optional). `model` is `${provider}/${model}` or ''
+   * (follow the harness-active model); absent = disabled defaults.
+   */
+  readonly pump?: {
+    readonly enabled: boolean
+    readonly model: string
+  }
 }
 
 /** Remote: config.get — effective settings plus load-fallback warnings. */

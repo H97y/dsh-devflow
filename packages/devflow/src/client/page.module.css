@@ -665,3 +665,14 @@
   font-size: 13px;
   color: var(--dsw-alias-label-primary);
 }
+
+.noticeInline {
+  align-self: stretch;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--dsw-alias-state-warn-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 19px;
+}
