@@ -40,6 +40,9 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { DEFAULT_PROMPTS, PROMPT_VARS, renderPrompt } from './prompts.ts'
 import type { DevflowPromptStage } from './prompts.ts'
 import { isProjectDir, isScanCandidate, normalizeRoot, projectIdentity, uniqueRoots } from './projects.ts'
+import { SettingsStore } from './config/store.ts'
+import { listHarnessModels } from './models.ts'
+import type { Settings, StageId } from './config/schema.ts'
 import type {
   DevflowAnswerRequest, DevflowArtifactRequest, DevflowDirListing, DevflowItem, DevflowIssue,
   DevflowItemView, DevflowScore, DevflowMutationResult, DevflowPipeline, DevflowPickCapabilityResult,
@@ -47,6 +50,7 @@ import type {
   DevflowProjectOrigin, DevflowProjectRemoveRequest, DevflowProjectScanRequest, DevflowPromptSetRequest,
   DevflowPromptsView, DevflowPumpTask, DevflowQuestion, DevflowReportArgs, DevflowStage, DevflowState,
   DevflowStateRequest, DevflowSubmitRequest, DevflowSubmitResult, DevflowView,
+  DevflowSettings, DevflowSettingsView, DevflowConfigSetRequest, DevflowModelInfo,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -127,6 +131,8 @@ interface ProjectRuntime {
   activeController: AbortController | null
   cancelRequestedId: string | null
   repoCache: string | null
+  /** Per-project unified settings (stage model overrides). */
+  settings: SettingsStore | null
 }
 
 /** Listing shape the browse capability returns (structural, wire-safe). */
@@ -535,6 +541,57 @@ export class DevflowService extends TypertRemoteService {
     return { ok: true }
   }
 
+  /** Unified settings read: effective document plus load warnings (D18). */
+  @Remote('config.get')
+  async configGet(request: DevflowStateRequest): Promise<DevflowSettingsView> {
+    const directory = await this.syncProjects()
+    const project = this.resolveProject(request.project, directory)
+    if (project.settings === null) throw new Error('devflow: 设置存储不可用')
+    const loaded = await project.settings.load()
+    // Re-project onto the wire shape (StageId keys widen to string keys).
+    return {
+      settings: { version: 1, stageModels: { ...loaded.settings.stageModels } },
+      warnings: [...loaded.warnings],
+    }
+  }
+
+  /**
+   * Unified settings write: whole-document replacement after validation
+   * (D5). Model ids are checked against the live harness catalog (the
+   * models.ts real implementation — this is one of its two production
+   * assembly points, D19).
+   */
+  @Remote('config.set')
+  async configSet(request: DevflowConfigSetRequest): Promise<DevflowSettings> {
+    const directory = await this.syncProjects()
+    const project = this.resolveProject(request.project, directory)
+    if (project.settings === null) throw new Error('devflow: 设置存储不可用')
+    const next = request.settings
+    const stageModels = next.stageModels
+    if (typeof stageModels === 'object' && stageModels !== null) {
+      const catalog = await listHarnessModels(this.ctx)
+      // An empty catalog cannot validate ids against anything: accept the
+      // write without membership checks rather than bricking the panel
+      // (drift handling stays a runtime fallback, D21).
+      if (catalog.length > 0) {
+        const known = new Set(catalog.map(m => m.id))
+        const drifted = Object.values(stageModels as Record<string, unknown>)
+          .filter((v): v is string => typeof v === 'string' && !known.has(v))
+        if (drifted.length > 0) {
+          throw new Error(`配置校验失败: 模型不在 harness 已配置列表: ${drifted.join(', ')}`)
+        }
+      }
+    }
+    const saved = await project.settings.save(next as Settings)
+    return { version: 1, stageModels: { ...saved.stageModels } }
+  }
+
+  /** Whitelisted harness model catalog for the panel dropdown (D1/D21). */
+  @Remote('config.models')
+  async configModels(_request: DevflowStateRequest): Promise<readonly DevflowModelInfo[]> {
+    return await listHarnessModels(this.ctx)
+  }
+
   /** Add one project folder manually (also un-ignores the path). */
   @Remote('project-add')
   async projectAdd(request: DevflowProjectAddRequest): Promise<DevflowProjectAddResult> {
@@ -743,7 +800,11 @@ export class DevflowService extends TypertRemoteService {
       activeController: null,
       cancelRequestedId: null,
       repoCache: null,
+      settings: null,
     }
+    runtime.settings = new SettingsStore(this.ctx, runtime.dir, runtime.policy)
+    // Load eagerly so stage overrides resolve from the first tick on.
+    void runtime.settings.load().catch(() => undefined)
     this.runtimes.set(key, runtime)
     return runtime
   }
@@ -1005,7 +1066,7 @@ export class DevflowService extends TypertRemoteService {
       repo: await this.repoContext(project),
       batch: JSON.stringify(batch.map(i => ({ id: i.id, kind: i.kind, raw: i.raw })), null, 1),
     })
-    const output = this.parseJson(await this.chat(project, user))
+    const output = this.parseJson(await this.chat(project, user, 8192, 'refine', batch[0]))
     const byId = new Map<string, Record<string, unknown>>()
     for (const row of (output.items as Record<string, unknown>[] | undefined) ?? []) {
       byId.set(String(row.id), row)
@@ -1052,7 +1113,7 @@ export class DevflowService extends TypertRemoteService {
       repo: await this.repoContext(project),
       requirement: this.requirementJson(item),
       answers: this.answersText(pipe),
-    })))
+    }), 8192, 'design', item))
     pipe.artifacts.design = asText(output.design, '')
     pipe.files.design = await this.writeFile(project, `artifacts/${item.id}-design.md`, pipe.artifacts.design)
     const questions = asQuestions(output.questions)
@@ -1072,7 +1133,7 @@ export class DevflowService extends TypertRemoteService {
       requirement: this.requirementJson(item),
       design: pipe.artifacts.design,
       answers: this.answersText(pipe),
-    })))
+    }), 8192, 'plan', item))
     pipe.artifacts.plan = asText(output.plan, '')
     pipe.files.plan = await this.writeFile(project, `artifacts/${item.id}-plan.md`, pipe.artifacts.plan)
     const questions = asQuestions(output.questions)
@@ -1094,7 +1155,7 @@ export class DevflowService extends TypertRemoteService {
       design: pipe.artifacts.design,
       plan: pipe.artifacts.plan,
       answers: this.answersText(pipe),
-    })))
+    }), 8192, 'review', item))
     pipe.round++
     const issues = asIssues(output.issues)
     pipe.artifacts.reviews.push({ phase: 'dp', round: pipe.round, verdict: asText(output.verdict, ''), issues })
@@ -1126,7 +1187,7 @@ export class DevflowService extends TypertRemoteService {
     const designOut = this.parseJson(await this.chat(project, renderPrompt('fixDesign', project.customPrompts, {
       design: pipe.artifacts.design,
       issues: issuesJson,
-    })))
+    }), 8192, 'design', item))
     if (typeof designOut.doc === 'string' && designOut.doc !== '') {
       pipe.artifacts.design = designOut.doc
       pipe.files.design = await this.writeFile(project, `artifacts/${item.id}-design.md`, designOut.doc)
@@ -1135,7 +1196,7 @@ export class DevflowService extends TypertRemoteService {
       design: clip(pipe.artifacts.design, 6000),
       plan: pipe.artifacts.plan,
       issues: issuesJson,
-    })))
+    }), 8192, 'plan', item))
     if (typeof planOut.doc === 'string' && planOut.doc !== '') {
       pipe.artifacts.plan = planOut.doc
       pipe.files.plan = await this.writeFile(project, `artifacts/${item.id}-plan.md`, planOut.doc)
@@ -1168,7 +1229,7 @@ export class DevflowService extends TypertRemoteService {
       fixReport: lastFix?.summary ?? '无',
       files: filesText,
       answers: this.answersText(pipe),
-    })))
+    }), 8192, 'codeReview', item))
     pipe.round++
     const issues = asIssues(output.issues)
     pipe.artifacts.reviews.push({ phase: 'code', round: pipe.round, verdict: asText(output.verdict, ''), issues })
@@ -1202,7 +1263,7 @@ export class DevflowService extends TypertRemoteService {
       impls: JSON.stringify(pipe.artifacts.impls),
       fixes: JSON.stringify(pipe.artifacts.fixes),
       verifies: JSON.stringify(pipe.artifacts.verifies),
-    })))
+    }), 8192, 'report', item))
     pipe.artifacts.report = asText(output.report, '')
     pipe.files.report = await this.writeFile(project, `reports/${item.id}-report.md`, pipe.artifacts.report)
     this.release(project, item)
@@ -1418,13 +1479,46 @@ export class DevflowService extends TypertRemoteService {
     pipe.resourceWaiting = null
   }
 
-  /** One-shot model call through the current default selection. */
-  private async chat(project: ProjectRuntime, user: string, maxTokens = 8192): Promise<string> {
-    const selection = this.modelSelection()
+  /**
+   * One-shot model call routed through the stage-level override when one is
+   * configured (D15 per-call level: GenerateOptions carries provider/model,
+   * so the injection point is exactly here — no adapter internals change).
+   * The resolution is recorded on the running item for traceability (D9).
+   */
+  private async chat(
+    project: ProjectRuntime,
+    user: string,
+    maxTokens = 8192,
+    stage?: StageId,
+    item?: DevflowItem,
+  ): Promise<string> {
+    const base = this.modelSelection()
+    let provider = base.provider
+    let model = base.model
+    let reasoningEffort = base.reasoningEffort
+    // Stage override: settings store resolves against the live harness
+    // state (models.ts real implementation injected here — the scheduler
+    // assembly point, D19); drift falls back with a note, never hard-fails.
+    if (stage !== undefined && project.settings !== null) {
+      const harness = {
+        active: { provider: base.provider, model: base.model },
+        configured: await listHarnessModels(this.ctx).then(models => models.map(m => m.id)),
+      }
+      const resolution = project.settings.resolveStageModel(stage, harness)
+      provider = resolution.provider
+      model = resolution.model
+      if (resolution.source === 'override') reasoningEffort = undefined
+      if (item !== undefined) {
+        const note = resolution.source === 'override'
+          ? `模型 ${provider}/${model}（阶段配置）`
+          : `模型 ${provider}/${model}（回退${resolution.note !== undefined ? `·${resolution.note}` : ''}）`
+        this.log(project, item, note)
+      }
+    }
     const options: GenerateOptions = {
-      provider: selection.provider,
-      model: selection.model,
-      ...(selection.reasoningEffort !== undefined ? { reasoningEffort: selection.reasoningEffort } : {}),
+      provider,
+      model,
+      ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
       messages: [createUserMessage({ content: [{ type: 'text', text: user }], source: { kind: 'user' } })],
       system: project.customPrompts.system ?? DEFAULT_PROMPTS.system,
       maxTokens,

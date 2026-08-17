@@ -315,6 +315,31 @@ export interface DevflowProjectScanRequest {
   readonly rescan: boolean
 }
 
+/** Settings document persisted at `<root>/.devflow/settings.json` (wire shape). */
+export interface DevflowSettings {
+  readonly version: 1
+  /** StageId → `${provider}/${model}`; absent stages fall back to the harness model. */
+  readonly stageModels: { readonly [stage: string]: string }
+}
+
+/** Remote: config.get — effective settings plus load-fallback warnings. */
+export interface DevflowSettingsView {
+  readonly settings: DevflowSettings
+  readonly warnings: readonly string[]
+}
+
+/** Remote: config.set — project scope plus the next whole settings document. */
+export interface DevflowConfigSetRequest {
+  readonly project: string | null
+  readonly settings: DevflowSettings
+}
+
+/** Remote: one whitelisted harness model descriptor (config.models). */
+export interface DevflowModelInfo {
+  readonly id: string
+  readonly label: string
+}
+
 /** Remote: which folder-picking interaction the host offers. */
 export interface DevflowPickCapabilityResult {
   readonly kind: 'native' | 'browse' | 'none'
