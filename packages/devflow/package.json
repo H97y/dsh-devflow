@@ -69,7 +69,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/schemastery": "link:/Users/heyue/deepseek-harness/vendor/schemastery",
+    "@deepseek-ai/schemastery": "^3.18.1",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
