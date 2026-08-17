@@ -265,6 +265,9 @@ export class DevflowService extends TypertRemoteService {
     this.timer = setInterval(() => { void this.tickAll() }, config.tickIntervalMs)
     ctx.effect(() => () => { clearInterval(this.timer) }, 'devflow.tickTimer')
     ctx.effect(() => this.registerTool(), 'devflow.tool')
+    // Boot stamp: correlates host logs with process restarts so “is the old
+    // module still loaded?” is answerable from the log instead of guesswork.
+    this.ctx.logger.info('devflow: 服务已启动（定时自举已启用，无需面板流量）')
     void this.tickAll()
   }
 
@@ -1191,16 +1194,21 @@ export class DevflowService extends TypertRemoteService {
       let waiting = 0
       let needs = 0
       let queued = 0
+      let ready = 0
       for (const project of this.runtimes.values()) {
         if (project.store === null) continue
         for (const item of project.store.items) {
           if (item.status === 'needs-user') needs++
+          if (item.status === 'ready') ready++
           if (item.status !== 'active' || item.pipeline === null) continue
           if (item.pipeline.waiting !== null) waiting++
           if (item.pipeline.resourceWaiting !== null) queued++
         }
       }
-      return `idle：当前无待泵任务（等待用户决策 ${waiting} 项，待补充需求 ${needs} 项，等待工作区 ${queued} 项）。稍后可再次调用 next。`
+      // 可推进 counts ready items: a stuck-at-ready machine shows a nonzero
+      // here with zero movement, which distinguishes “loaded but frozen”
+      // from “not loaded at all” at one glance.
+      return `idle：当前无待泵任务（可推进 ${ready} 项，等待用户决策 ${waiting} 项，待补充需求 ${needs} 项，等待工作区 ${queued} 项）。稍后可再次调用 next。`
     }
     return JSON.stringify(this.pumpTaskFor(next.p, next.item))
   }

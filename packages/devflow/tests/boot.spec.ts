@@ -120,7 +120,7 @@ function bootService(files: Map<string, string>, llm: unknown): DevflowService {
       ? { currentSelection: () => ({ provider: 'fake', model: 'fake' }) }
       : undefined,
     effect: () => () => undefined,
-    logger: { error: () => undefined },
+    logger: { error: () => undefined, info: () => undefined },
     on: () => () => undefined,
     // cordis Service base registers itself through ctx.reflect.provide.
     reflect: { provide: () => undefined },
