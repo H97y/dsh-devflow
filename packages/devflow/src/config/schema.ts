@@ -27,7 +27,10 @@ export const STAGE_LABELS: Record<StageId, string> = {
   report: '开发报告',
 }
 
-/** Unified plugin settings persisted at `<root>/.devflow/settings.json`. */
+/**
+ * Unified plugin settings, persisted per project at
+ * `<project-root>/.devflow/settings.json` (one file per project partition).
+ */
 export interface Settings {
   version: 1
   /**

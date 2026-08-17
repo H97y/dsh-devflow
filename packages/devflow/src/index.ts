@@ -21,8 +21,11 @@
  * The panel reaches this service through generated Remotes
  * (state/submit/answer/cancel/resume/retry/artifact/prompts/prompt-set plus
  * the project-add/remove/scan/pick/list-dir management face); the model
- * reaches it through the `devflow` tool (next/report). All durable state
- * lives under `<root>/.devflow/` as lossless JSON.
+ * reaches it through the `devflow` tool (next/report). Durable state is
+ * per-project: each partition's pool, prompts, and settings live under
+ * that project's own `<project-root>/.devflow/` as lossless JSON; the
+ * one cross-project file — the shared project registry — sits under the
+ * workspace root's `.devflow/`.
  *
  * @module @deepseek-ai/dsh-devflow
  */

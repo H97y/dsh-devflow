@@ -1,6 +1,7 @@
 /**
- * Settings store: load/save of `<root>/.devflow/settings.json` plus the
- * per-stage model resolver. The harness model state is injected as a
+ * Settings store: load/save of `<project-root>/.devflow/settings.json`
+ * plus the per-stage model resolver. Settings are per-project (one store
+ * per project partition). The harness model state is injected as a
  * parameter (D19) — this module never imports the models adapter and is
  * structurally identical under test mocks and production wiring.
  *
@@ -52,7 +53,7 @@ export class SettingsStore {
 
   /**
    * @param ctx - host context carrying fs.
-   * @param dir - the project's `.devflow` directory.
+   * @param dir - the project's `.devflow` directory (`<project-root>/.devflow`).
    * @param policy - workspace-write policy scoped to the project root.
    */
   constructor(
@@ -67,10 +68,11 @@ export class SettingsStore {
   }
 
   /**
-   * Load settings (cached after the first hit). File absent → run the
-   * legacy import (D20 trigger: absence, and only absence); unreadable /
-   * unknown version / invalid fields → defaults plus warnings, and the
-   * original file is never overwritten by the load path.
+   * Load settings (cached after the first hit). File absent → defaults,
+   * persisted so the file exists from the first read — deleting the file
+   * IS the reset. Unreadable / unknown version / invalid fields →
+   * defaults plus warnings, and the original file is never overwritten
+   * by the load path.
    */
   async load(): Promise<LoadResult> {
     if (this.cache !== null) return { settings: this.cache, warnings: this.cacheWarnings }

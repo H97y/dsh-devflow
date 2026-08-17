@@ -120,11 +120,12 @@ report) can pick its own model, with candidates read-only from the models
 configured in harness (the plugin manages no API keys). Unset stages fall
 back to the harness-active model; a configured model later removed from
 harness falls back at runtime and is flagged as drifted in the pane.
-Saves take effect immediately and persist to `<root>/.devflow/settings.json`
-(runtime state, untracked by git).
+Saves take effect immediately and persist per project to
+`<project-root>/.devflow/settings.json` (one file per project; runtime
+state, untracked by git).
 
-Reset semantics: deleting settings.json resets to defaults (the next
-load recreates a default document).
+Reset semantics: deleting a project's settings.json resets that project
+to defaults (the next load recreates a default document).
 
 Panel scope: prompt templates keep their own「提示词」entry in the workbench
 (content configuration, not migrated into the settings pane); host-level
