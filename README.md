@@ -5,6 +5,8 @@ DeepSeek Harness 的自动开发流水线插件：需求池 → LLM 批量精炼
 代码评审循环（≤3 轮）→ Web 验证 → 集成分支合并回 main → 开发报告。
 所有可能阻塞的决策默认由模型按项目规范自动决策；确需人工拍板的进入各阶段等待队列，
 页面作答后自动续跑。全部状态持久化在 `<root>/.devflow/`。
+需求池按项目隔离且零配置：工作区内的项目自动发现，面板内可添加/移除任意项目目录，
+多项目流水线并行推进。
 
 浏览器端为原生嵌入式界面（非浮层弹窗）：侧边栏底部入口（与"设置"同层级）点击后
 在主区域打开整页工作台。插件自行挂载生成的 Remote 命名空间，不修改 harness
@@ -15,15 +17,16 @@ DeepSeek Harness 的自动开发流水线插件：需求池 → LLM 批量精炼
 ```
 ├── package.json / pnpm-workspace.yaml / tsconfig.{host,client}.json   # 仓库壳与聚合编译图
 ├── packages/devflow/          # 可发布包 dsh-devflow
-│   ├── src/index.ts           # 宿主服务：状态机 + LLM 阶段 + devflow 模型工具
+│   ├── src/index.ts           # 宿主服务：按项目隔离的状态机 + LLM 阶段 + devflow 模型工具
+│   ├── src/projects.ts        # 项目标记识别 + 分区身份（key 派生/去重）
 │   ├── src/prompts.ts         # 9 阶段默认提示词 + {{变量}} 渲染
 │   ├── src/types.ts           # 公共类型
-│   ├── src/client/            # 浏览器界面（侧边栏入口 + 主区域页面）
+│   ├── src/client/            # 浏览器界面（侧边栏入口 + 带项目切换器的主区域页面）
 │   └── lib/typert.*           # vendored wire 工件（见下）
 └── scripts/
     ├── tsdown.client.ts       # vendored 自 harness 的浏览器 bundle 预设
     ├── platform.ts            # vendored 平台模块表
-    ├── vendor-typert.sh       # 从 harness 拷贝并改名 typert 四件套（手动）
+    ├── vendor-typert.sh       # 旧流程：从 harness 拷贝并改名 typert 四件套（手动，备用）
     └── sync-to-profile.sh     # 开发回路：link 进 dsh profile + 重建本仓库
 ```
 
@@ -42,11 +45,13 @@ pnpm sync:profile                         # link 进 profile（首次/组合变�
 
 日常迭代：改代码 → `pnpm build` → 浏览器刷新即可（无需重启，无需碰 harness）。
 
-**Typert wire 工件为什么是 vendored**：生成器的 workspace 发现依赖 harness monorepo
-布局（聚合 tsconfig 引用 + `<root>/packages/` 目录包含检查），无法在单包仓库内驱动。
-`@Remote` 方法面变化时：临时把 `packages/devflow` 拷进某个 harness checkout 的
-`packages/` 下重建，`scripts/vendor-typert.sh` 会把重新生成的 `lib/typert.*` 改名
-（`@deepseek-ai/dsh-devflow` → `dsh-devflow`）后提交回本仓库；等 npm 版本追平
+**Typert wire 工件为什么是 vendored、如何再生成**：生成器的工作区发现要求被分析包与
+`@deepseek-ai/dsh-typert-protocol` 以真实目录形式位于同一 `<root>/packages/` 下（其对
+`@Remote` 装饰器的识别要把符号声明解析到已注册的 protocol 包）。`@Remote` 方法面变化时，
+运行 `pnpm --filter dsh-devflow run gen:typert`：脚本会在本仓库内组装一次性临时工作区
+（`.typert-gen/`，已 git-ignore），放入本包与 protocol 包的真实副本及把 protocol 导入钉到
+本地副本的临时聚合配置，直接重新生成四件套到 `wire/` 后清理现场——全程不触碰 harness
+checkout。（`scripts/vendor-typert.sh` 旧的拷进 harness 流程保留为备用。）等 npm 版本追平
 checkout 后可改为直接依赖 npm 包。
 
 ## 快速上手（安装与首次使用）
@@ -86,18 +91,27 @@ pnpm sync:profile        # link 进 ~/.dsh/profiles/web（DSH_PROFILE 可换 pro
 
 ### 配置工作区
 
-`root` 默认取进程工作目录；如需指向特定工作区，在你的 profile patch 层
-（`~/.dsh/profiles/web/cordis.patch.yml`）覆盖：
+`root` 默认取进程工作目录，指向你的项目集合目录即可（无需其他配置）；如需覆盖，
+在你的 profile patch 层（`~/.dsh/profiles/web/cordis.patch.yml`）：
 
 ```yaml
 - id: devflow
   config:
-    root: /path/to/your/workspace   # .devflow/ 状态与小需求工作区所在
-    # maxActive: 3                  # 并发流水线上限（默认 3）
-    # maxWorktrees: 2               # worktree 并发上限（默认 2）
+    root: /path/to/your/projects   # 项目发现从这里扫描；默认项目的 .devflow/ 也在其下
+    # maxActive: 3                  # 单项目并发流水线上限（默认 3）
+    # maxWorktrees: 2               # 单项目 worktree 并发上限（默认 2）
     # logCap: 40                    # 每条需求日志上限（默认 40）
     # tickIntervalMs: 2000          # 状态机节拍（默认 2000）
 ```
+
+**项目自动发现与管理（零配置）**：插件自动扫描 `root` 下的独立项目目录（含 `.git` /
+`package.json` / `go.mod` 等标记的文件夹；`root` 自身是单仓库时视为一个项目，是项目
+集合目录时扫到二级如 `~/projects/group/repo`），右上角下拉框即可切换——每个项目拥有
+完全隔离的需求池、`.devflow/` 状态、提示词、状态机节拍与主工作区/worktree 配额，
+多项目流水线并行推进互不争用。工作区外的项目可在下拉框旁的「＋」里添加：系统目录
+选择器 / 应用内目录浏览 / 直接粘贴路径（与 GUI 添加工作区同源同体验），也可随时移除
+或恢复；手动添加与隐藏记录持久化在 `<root>/.devflow/projects.json`。需求 id 内嵌项目
+key（`<key>-r<n>`），面板操作与会话泵回填都据此自动路由。
 
 ### 验证与首次使用
 

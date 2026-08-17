@@ -13,10 +13,12 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Button, IconChevronLeftOutline14, IconCloseOutline16,
+  Button, IconChevronLeftOutline14, IconCloseOutline16, IconFolderClose16,
+  IconPlusOutline16, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  DevflowAnswer, DevflowItemView, DevflowPromptsView, DevflowQuestion,
+  DevflowAnswer, DevflowDirListing, DevflowItemView, DevflowPromptsView,
+  DevflowQuestion, DevflowView,
 } from '../types.ts'
 import type { DevflowRemote, DevflowUiStore, RemoteResult } from './devflow-ui.ts'
 import { callRemote, errorText, useDevflowUi } from './devflow-ui.ts'
@@ -300,8 +302,9 @@ function ArtifactPane({ title, text, onBack }: {
 }
 
 /** Stage prompt editor (right pane mode): pick, edit, save, reset. */
-function PromptPane({ remote, onBack }: {
+function PromptPane({ remote, project, onBack }: {
   remote: DevflowRemote
+  project: string | null
   onBack: () => void
 }): JSX.Element {
   const [data, setData] = useState<DevflowPromptsView | null>(null)
@@ -310,7 +313,7 @@ function PromptPane({ remote, onBack }: {
   const [status, setStatus] = useState('')
   useEffect(() => {
     let cancelled = false
-    callRemote(remote.prompts()).then((view) => {
+    callRemote(remote.prompts({ project })).then((view) => {
       if (cancelled) return
       setData(view)
       setText(view.custom.design ?? view.defaults.design ?? '')
@@ -320,7 +323,7 @@ function PromptPane({ remote, onBack }: {
     return () => {
       cancelled = true
     }
-  }, [remote])
+  }, [remote, project])
   const pick = (next: string): void => {
     setStage(next)
     setText(data === null ? '' : data.custom[next] ?? data.defaults[next] ?? '')
@@ -328,7 +331,7 @@ function PromptPane({ remote, onBack }: {
   }
   const save = useCallback(() => {
     setStatus('保存中…')
-    callRemote(remote['prompt-set']({ stage, template: text })).then(() => callRemote(remote.prompts()).then((view) => {
+    callRemote(remote['prompt-set']({ stage, template: text, project })).then(() => callRemote(remote.prompts({ project })).then((view) => {
       setData(view)
       setStatus(text === view.defaults[stage] ? '已保存（与默认一致）' : '已保存 ✓')
     }), (error: unknown) => {
@@ -336,10 +339,10 @@ function PromptPane({ remote, onBack }: {
     }).catch((error: unknown) => {
       setStatus(`保存失败: ${errorText(error)}`)
     })
-  }, [remote, stage, text])
+  }, [remote, stage, text, project])
   const reset = useCallback(() => {
     setStatus('恢复中…')
-    callRemote(remote['prompt-set']({ stage, template: null })).then(() => callRemote(remote.prompts()).then((view) => {
+    callRemote(remote['prompt-set']({ stage, template: null, project })).then(() => callRemote(remote.prompts({ project })).then((view) => {
       setData(view)
       setText(view.defaults[stage] ?? '')
       setStatus('已恢复默认 ✓')
@@ -348,7 +351,7 @@ function PromptPane({ remote, onBack }: {
     }).catch((error: unknown) => {
       setStatus(`恢复失败: ${errorText(error)}`)
     })
-  }, [remote, stage])
+  }, [remote, stage, project])
   if (data === null) {
     return (
       <div className={css.pane}>
@@ -386,6 +389,232 @@ function PromptPane({ remote, onBack }: {
         {status !== '' ? <div className={css.muted}>{status}</div> : null}
       </div>
     </div>
+  )
+}
+
+/** Chinese labels for project origins. */
+const ORIGIN: Record<string, string> = {
+  workspace: '工作区',
+  scan: '自动发现',
+  manual: '手动添加',
+}
+
+/** One directory level at a time (the host browse capability). */
+function DirBrowse({ remote, onUse, onCancel }: {
+  remote: DevflowRemote
+  onUse: (path: string) => void
+  onCancel: () => void
+}): JSX.Element {
+  const [listing, setListing] = useState<DevflowDirListing | null>(null)
+  const [status, setStatus] = useState('加载中…')
+  const go = useCallback((path: string | null) => {
+    setStatus('加载中…')
+    callRemote(remote['project-list-dir']({ path })).then((value) => {
+      setListing(value)
+      setStatus('')
+    }, (error: unknown) => {
+      setStatus(`读取失败: ${errorText(error)}`)
+    }).catch(() => undefined)
+  }, [remote])
+  useEffect(() => { go(null) }, [go])
+  return (
+    <div className={css.browseBox}>
+      <div className={css.crumbs}>
+        {listing?.crumbs.map(crumb => (
+          <button
+            key={crumb.path}
+            type="button"
+            className={css.crumb}
+            title={crumb.path}
+            onClick={() => { go(crumb.path) }}
+          >
+            {crumb.name}
+          </button>
+        ))}
+      </div>
+      <div className={css.dirList}>
+        {status !== '' ? <div className={css.muted}>{status}</div> : null}
+        {listing?.entries.map(entry => (
+          <button
+            key={entry.path}
+            type="button"
+            className={`${css.dirRow}${entry.hidden ? ` ${css.dirRowDim}` : ''}`}
+            title={entry.path}
+            onClick={() => { go(entry.path) }}
+          >
+            {entry.name}
+          </button>
+        ))}
+        {listing !== null && status === '' && listing.entries.length === 0
+          ? <div className={css.muted}>（无子目录）</div>
+          : null}
+        {listing?.truncated === true ? <div className={css.muted}>（目录过多，列表已截断）</div> : null}
+      </div>
+      <div className={css.actions}>
+        <Button variant="ghost" size="sm" onClick={onCancel}>取消</Button>
+        <span className={css.spacer} />
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={listing === null}
+          onClick={() => { if (listing !== null) onUse(listing.path) }}
+        >
+          使用此文件夹
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/** Project directory management: list, hide/restore, add (picker/browse/paste). */
+function ProjectManageModal({ open, onClose, remote, store, view }: {
+  open: boolean
+  onClose: () => void
+  remote: DevflowRemote
+  store: DevflowUiStore
+  view: DevflowView | null
+}): JSX.Element {
+  const [capKind, setCapKind] = useState<'native' | 'browse' | 'none' | 'loading'>('loading')
+  const [browsing, setBrowsing] = useState(false)
+  const [pathInput, setPathInput] = useState('')
+  const [addBusy, setAddBusy] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [picking, setPicking] = useState(false)
+  const [removeKey, setRemoveKey] = useState<string | null>(null)
+
+  // Opening the dialog forces a rescan so freshly created folders appear,
+  // and asks the host which picking interaction it offers.
+  useEffect(() => {
+    if (!open) return
+    setBrowsing(false)
+    setAddError('')
+    callRemote(remote['project-scan']({ rescan: true }))
+      .then(() => { store.refresh() }, () => undefined)
+      .catch(() => undefined)
+    callRemote(remote['project-pick-capability']()).then((result) => {
+      setCapKind(result.kind)
+    }, () => {
+      setCapKind('none')
+    }).catch(() => undefined)
+  }, [open, remote, store])
+
+  const addProject = useCallback((rawPath: string) => {
+    const path = rawPath.trim()
+    if (path === '') {
+      setAddError('请填写项目目录的绝对路径')
+      return
+    }
+    setAddBusy(true)
+    setAddError('')
+    callRemote(remote['project-add']({ path })).then((result) => {
+      setAddBusy(false)
+      if (result.ok) {
+        setPathInput('')
+        if (result.key !== null) store.setProject(result.key)
+        store.refresh()
+      } else {
+        setAddError(result.reason ?? '添加失败')
+      }
+    }, (error: unknown) => {
+      setAddBusy(false)
+      setAddError(errorText(error))
+    }).catch(() => undefined)
+  }, [remote, store])
+
+  const pickNative = useCallback(() => {
+    setPicking(true)
+    setAddError('')
+    callRemote(remote['project-pick-native']()).then((result) => {
+      setPicking(false)
+      if (result.path !== null) addProject(result.path)
+    }, (error: unknown) => {
+      setPicking(false)
+      setAddError(errorText(error))
+    }).catch(() => undefined)
+  }, [remote, addProject])
+
+  const removeProject = useCallback((key: string) => {
+    setRemoveKey(key)
+    setAddError('')
+    callRemote(remote['project-remove']({ key })).then((result) => {
+      setRemoveKey(null)
+      if (!result.ok) setAddError(result.reason ?? '移除失败')
+      store.refresh()
+    }, (error: unknown) => {
+      setRemoveKey(null)
+      setAddError(errorText(error))
+    }).catch(() => undefined)
+  }, [remote, store])
+
+  const projects = view?.projects ?? []
+  const ignored = view?.ignoredRoots ?? []
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="项目管理"
+      closeLabel="关闭"
+      description="每个项目拥有独立的需求池、提示词与工作区配额；工作区内的项目目录会自动发现。"
+    >
+      <div className={css.projList}>
+        {projects.map(project => (
+          <div key={project.key} className={css.projRow}>
+            <span className={css.projName}>
+              {project.name}
+              <span className={css.projOrigin}>{ORIGIN[project.origin] ?? project.origin}</span>
+            </span>
+            <span className={css.projPath} title={project.root}>{project.root}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={removeKey !== null}
+              onClick={() => { removeProject(project.key) }}
+            >
+              {removeKey === project.key ? '移除中…' : '移除'}
+            </Button>
+          </div>
+        ))}
+        {ignored.map(root => (
+          <div key={root} className={`${css.projRow} ${css.projRowDim}`}>
+            <span className={css.projName}>已隐藏</span>
+            <span className={css.projPath} title={root}>{root}</span>
+            <Button variant="ghost" size="sm" disabled={addBusy} onClick={() => { addProject(root) }}>恢复</Button>
+          </div>
+        ))}
+      </div>
+      {browsing
+        ? (
+          <DirBrowse
+            remote={remote}
+            onUse={(path) => { setBrowsing(false); addProject(path) }}
+            onCancel={() => { setBrowsing(false) }}
+          />
+        )
+        : (
+          <div className={css.actions}>
+            {capKind === 'native'
+              ? (
+                <Button variant="ghost" size="sm" disabled={picking || addBusy} onClick={() => { pickNative() }}>
+                  {picking ? '选择中…' : '选择文件夹…'}
+                </Button>
+              )
+              : null}
+            {capKind === 'browse'
+              ? <Button variant="ghost" size="sm" onClick={() => { setBrowsing(true) }}>浏览…</Button>
+              : null}
+            <input
+              className={css.projInput}
+              placeholder="或粘贴项目目录绝对路径"
+              value={pathInput}
+              onChange={(event) => { setPathInput(event.target.value) }}
+            />
+            <Button variant="primary" size="sm" disabled={addBusy} onClick={() => { addProject(pathInput) }}>
+              {addBusy ? '添加中…' : '添加'}
+            </Button>
+          </div>
+        )}
+      {addError !== '' ? <div className={css.errorText}>{`⚠ ${addError}`}</div> : null}
+    </Modal>
   )
 }
 
@@ -451,6 +680,10 @@ export function DevflowPage({ store, remote }: {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  // Optimistic project-switch feedback: the <select> shows the picked key
+  // until the polled view adopts it (setProject triggers an immediate poll).
+  const [pickedProject, setPickedProject] = useState<string | null>(null)
+  const [manageOpen, setManageOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const items = view?.items ?? []
@@ -479,9 +712,10 @@ export function DevflowPage({ store, remote }: {
     return () => { observer.disconnect() }
   }, [snap.open])
 
-  // Escape unwinds the pane stack first, then closes the page.
+  // Escape unwinds the pane stack first, then closes the page; an open modal
+  // owns its own Escape handling, so the page yields while it is up.
   useEffect(() => {
-    if (!snap.open) return
+    if (!snap.open || manageOpen) return
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       if (pane.kind !== 'item') setPane({ kind: 'item' })
@@ -489,17 +723,22 @@ export function DevflowPage({ store, remote }: {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => { document.removeEventListener('keydown', onKeyDown) }
-  }, [snap.open, pane.kind, store])
+  }, [snap.open, manageOpen, pane.kind, store])
 
   // Land focus on the page surface when it opens (baseline focus management).
   useEffect(() => {
     if (snap.open) rootRef.current?.focus()
   }, [snap.open])
 
+  // Closing the page drops any open dialog with it.
+  useEffect(() => {
+    if (!snap.open) setManageOpen(false)
+  }, [snap.open])
+
   const submit = useCallback(() => {
     if (text.trim() === '') return
     setSending(true)
-    callRemote(remote.submit({ kind, text })).then(() => {
+    callRemote(remote.submit({ kind, text, project: view?.project ?? null })).then(() => {
       setText('')
       setSubmitError('')
       store.refresh()
@@ -508,7 +747,7 @@ export function DevflowPage({ store, remote }: {
     }).catch(() => undefined).finally(() => {
       setSending(false)
     })
-  }, [remote, store, kind, text])
+  }, [remote, store, kind, text, view])
 
   const openArtifact = useCallback((itemId: string, name: 'design' | 'plan' | 'report' | 'reviews') => {
     callRemote(remote.artifact({ itemId, name })).then(
@@ -555,11 +794,43 @@ export function DevflowPage({ store, remote }: {
           <b className={css.title}>自动开发流水线</b>
           <span className={css.subtitle}>{statusLine}</span>
         </div>
+        {view !== null && view.projects.length > 0
+          ? (
+            <select
+              className={css.select}
+              value={pickedProject !== null && pickedProject !== view.project ? pickedProject : view.project ?? ''}
+              title={view.projects.find(p => p.key === view.project)?.root ?? '选择项目'}
+              aria-label="切换项目"
+              onChange={(event) => {
+                setPickedProject(event.target.value)
+                store.setProject(event.target.value)
+              }}
+            >
+              {view.projects.map(p => <option key={p.key} value={p.key}>{p.name}</option>)}
+            </select>
+          )
+          : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="管理项目"
+          title="管理项目（自动发现 / 添加 / 移除）"
+          onClick={() => { setManageOpen(true) }}
+        >
+          <IconPlusOutline16 size={14} />
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => { setPane({ kind: 'prompts' }) }}>提示词</Button>
         <Button variant="ghost" size="sm" aria-label="关闭" onClick={() => { store.close() }}>
           <IconCloseOutline16 size={14} />
         </Button>
       </header>
+      <ProjectManageModal
+        open={manageOpen}
+        onClose={() => { setManageOpen(false) }}
+        remote={remote}
+        store={store}
+        view={view}
+      />
       {snap.offline ? <div className={css.noticeBar}>⚠ 与宿主的连接中断，正在自动重试</div> : null}
       {view?.error != null ? <div className={css.noticeBar}>{`⚠ ${view.error}`}</div> : null}
       <div className={css.body}>
@@ -609,7 +880,7 @@ export function DevflowPage({ store, remote }: {
         </aside>
         <main className={css.detail}>
           {pane.kind === 'prompts'
-            ? <PromptPane remote={remote} onBack={() => { setPane({ kind: 'item' }) }} />
+            ? <PromptPane remote={remote} project={view?.project ?? null} onBack={() => { setPane({ kind: 'item' }) }} />
             : pane.kind === 'artifact'
               ? <ArtifactPane title={pane.title} text={pane.text} onBack={() => { setPane({ kind: 'item' }) }} />
               : selected !== undefined

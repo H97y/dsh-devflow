@@ -64,6 +64,7 @@
   "scripts": {
     "build:types": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
     "build": "cp wire/typert.host.js wire/typert.host.d.ts wire/typert.remote-client.js wire/typert.remote-client.d.ts lib/ && pnpm run build:types && tsdown",
+    "gen:typert": "node scripts/gen-typert.mjs",
     "test": "vitest run",
     "watch": "tsdown --watch"
   },

@@ -3,29 +3,41 @@ import type {
   RemoteResult,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { DevflowAnswerRequest, DevflowArtifactRequest, DevflowMutationResult, DevflowPromptSetRequest, DevflowPromptsView, DevflowSubmitRequest, DevflowSubmitResult, DevflowView } from 'dsh-devflow/types'
+import type { DevflowAnswerRequest, DevflowArtifactRequest, DevflowDirListing, DevflowMutationResult, DevflowPickCapabilityResult, DevflowPickNativeResult, DevflowProjectAddRequest, DevflowProjectAddResult, DevflowProjectRemoveRequest, DevflowProjectScanRequest, DevflowPromptSetRequest, DevflowPromptsView, DevflowStateRequest, DevflowSubmitRequest, DevflowSubmitResult, DevflowView } from 'dsh-devflow/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$646576666c6f77 {
     answer: (request: DevflowAnswerRequest) => Promise<RemoteResult<DevflowMutationResult>>
     artifact: (request: DevflowArtifactRequest) => Promise<RemoteResult<string>>
     cancel: (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
+    'project-add': (request: DevflowProjectAddRequest) => Promise<RemoteResult<DevflowProjectAddResult>>
+    'project-list-dir': (request: { path: string | null; }) => Promise<RemoteResult<DevflowDirListing>>
+    'project-pick-capability': () => Promise<RemoteResult<DevflowPickCapabilityResult>>
+    'project-pick-native': () => Promise<RemoteResult<DevflowPickNativeResult>>
+    'project-remove': (request: DevflowProjectRemoveRequest) => Promise<RemoteResult<DevflowMutationResult>>
+    'project-scan': (_request: DevflowProjectScanRequest) => Promise<RemoteResult<DevflowMutationResult>>
     'prompt-set': (request: DevflowPromptSetRequest) => Promise<RemoteResult<DevflowMutationResult>>
-    prompts: () => Promise<RemoteResult<DevflowPromptsView>>
+    prompts: (request: DevflowStateRequest) => Promise<RemoteResult<DevflowPromptsView>>
     resume: (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
     retry: (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
-    state: () => Promise<RemoteResult<DevflowView>>
+    state: (request: DevflowStateRequest) => Promise<RemoteResult<DevflowView>>
     submit: (request: DevflowSubmitRequest) => Promise<RemoteResult<DevflowSubmitResult>>
   }
   interface TypertRemoteMap {
     'devflow/answer': (request: DevflowAnswerRequest) => Promise<RemoteResult<DevflowMutationResult>>
     'devflow/artifact': (request: DevflowArtifactRequest) => Promise<RemoteResult<string>>
     'devflow/cancel': (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
+    'devflow/project-add': (request: DevflowProjectAddRequest) => Promise<RemoteResult<DevflowProjectAddResult>>
+    'devflow/project-list-dir': (request: { path: string | null; }) => Promise<RemoteResult<DevflowDirListing>>
+    'devflow/project-pick-capability': () => Promise<RemoteResult<DevflowPickCapabilityResult>>
+    'devflow/project-pick-native': () => Promise<RemoteResult<DevflowPickNativeResult>>
+    'devflow/project-remove': (request: DevflowProjectRemoveRequest) => Promise<RemoteResult<DevflowMutationResult>>
+    'devflow/project-scan': (_request: DevflowProjectScanRequest) => Promise<RemoteResult<DevflowMutationResult>>
     'devflow/prompt-set': (request: DevflowPromptSetRequest) => Promise<RemoteResult<DevflowMutationResult>>
-    'devflow/prompts': () => Promise<RemoteResult<DevflowPromptsView>>
+    'devflow/prompts': (request: DevflowStateRequest) => Promise<RemoteResult<DevflowPromptsView>>
     'devflow/resume': (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
     'devflow/retry': (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
-    'devflow/state': () => Promise<RemoteResult<DevflowView>>
+    'devflow/state': (request: DevflowStateRequest) => Promise<RemoteResult<DevflowView>>
     'devflow/submit': (request: DevflowSubmitRequest) => Promise<RemoteResult<DevflowSubmitResult>>
   }
   interface TypertRemoteNamespaceMap {

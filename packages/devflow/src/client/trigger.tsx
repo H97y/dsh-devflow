@@ -11,17 +11,11 @@
 import type { JSX } from 'react'
 import { useSyncExternalStore } from 'react'
 import { IconChecklistOutline14, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { DevflowItemView } from '../types.ts'
 import type { DevflowUiStore } from './devflow-ui.ts'
 import css from './trigger.module.css'
 
 /** Trigger copy (the rail tooltip and the wide row label). */
 const LABEL = '开发流水线'
-
-/** Items parked in the waiting queue: a human decision is pending. */
-function waitingCount(items: readonly DevflowItemView[]): number {
-  return items.filter(i => i.questions !== null && i.status !== 'active' && i.status !== 'paused').length
-}
 
 /**
  * Render the sidebar-foot trigger button.
@@ -31,7 +25,9 @@ function waitingCount(items: readonly DevflowItemView[]): number {
  */
 export function DevflowTrigger({ store, wide }: { store: DevflowUiStore; wide: boolean }): JSX.Element {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot)
-  const waiting = snap.view === null ? 0 : waitingCount(snap.view.items)
+  // waitingTotal aggregates the waiting queue across every project partition,
+  // so the badge stays honest no matter which partition the panel polls.
+  const waiting = snap.view?.waitingTotal ?? 0
   const badge = waiting > 0
     ? <span className={wide ? css.badge : css.railBadge}>{waiting > 9 ? '9+' : String(waiting)}</span>
     : null

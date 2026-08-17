@@ -3,3 +3,7 @@ packages/devflow/lib/
 lib/
 *.tsbuildinfo
 .DS_Store
+todo_list/
+.typert-gen/
+AGENTS.md
+.devflow/

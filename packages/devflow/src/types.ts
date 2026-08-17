@@ -171,6 +171,27 @@ export interface DevflowWorktreeRow {
   readonly branch: string
 }
 
+/** How one project partition entered the panel directory. */
+export type DevflowProjectOrigin = 'workspace' | 'scan' | 'manual'
+
+/** One project partition in the panel directory (isolation unit). */
+export interface DevflowProjectInfo {
+  /** Filesystem-safe partition key; prefixes this project's item ids. */
+  readonly key: string
+  /** Switcher label (the workspace root's basename). */
+  readonly name: string
+  /** The workspace root owning this project's `.devflow/` and workspaces. */
+  readonly root: string
+  /** How the partition was discovered: the dsh workspace itself, an
+   * auto-scan hit underneath it, or a manually added folder. */
+  readonly origin: DevflowProjectOrigin
+}
+
+/** Remote: scope selector for project-partitioned calls (null = default). */
+export interface DevflowStateRequest {
+  readonly project: string | null
+}
+
 /** Whole persisted state (`.devflow/state.json`). */
 export interface DevflowState {
   seq: number
@@ -206,18 +227,28 @@ export interface DevflowItemView {
   readonly log: readonly DevflowLogLine[]
 }
 
-/** Whole panel projection. */
+/** Whole panel projection: one project's items plus the project directory. */
 export interface DevflowView {
   readonly busy: boolean
   readonly note: string | null
   readonly error: string | null
+  /** Key of the project these items belong to. */
+  readonly project: string | null
+  /** Every visible project partition (switcher + manage directory). */
+  readonly projects: readonly DevflowProjectInfo[]
+  /** Roots hidden via the manage dialog (restorable by re-adding). */
+  readonly ignoredRoots: readonly string[]
+  /** Waiting-queue total across every loaded project (trigger badge). */
+  readonly waitingTotal: number
   readonly items: readonly DevflowItemView[]
 }
 
-/** Remote: submit a raw requirement or bug into the pool. */
+/** Remote: submit a raw requirement or bug into one project's pool. */
 export interface DevflowSubmitRequest {
   readonly kind: 'requirement' | 'bug'
   readonly text: string
+  /** Target project key (null = default project). */
+  readonly project: string | null
 }
 
 /** Remote: submit result. */
@@ -256,6 +287,65 @@ export interface DevflowPromptsView {
 export interface DevflowPromptSetRequest {
   readonly stage: string
   readonly template: string | null
+  /** Target project key (null = default project). */
+  readonly project: string | null
+}
+
+/** Remote: add one project folder (manual add; also un-ignores the path). */
+export interface DevflowProjectAddRequest {
+  /** Absolute folder path (from the picker, the browse flow, or pasted). */
+  readonly path: string
+}
+
+/** Remote: result of adding a project. */
+export interface DevflowProjectAddResult {
+  readonly ok: boolean
+  readonly reason?: string
+  /** Key of the added (or already-present) project partition. */
+  readonly key: string | null
+}
+
+/** Remote: hide one project from the directory (discoverable state kept). */
+export interface DevflowProjectRemoveRequest {
+  readonly key: string
+}
+
+/** Remote: force a workspace rescan now. */
+export interface DevflowProjectScanRequest {
+  readonly rescan: boolean
+}
+
+/** Remote: which folder-picking interaction the host offers. */
+export interface DevflowPickCapabilityResult {
+  readonly kind: 'native' | 'browse' | 'none'
+}
+
+/** Remote: one native OS chooser round trip. */
+export interface DevflowPickNativeResult {
+  /** The chosen absolute path, or null when the operator cancelled. */
+  readonly path: string | null
+}
+
+/** Remote: one browser row of a listed directory level. */
+export interface DevflowDirEntry {
+  readonly name: string
+  readonly path: string
+  readonly hidden: boolean
+}
+
+/** Remote: one directory level plus its ancestry (browse flow). */
+export interface DevflowDirListing {
+  readonly path: string
+  readonly home: string
+  readonly crumbs: readonly DevflowDirEntry[]
+  readonly entries: readonly DevflowDirEntry[]
+  readonly truncated: boolean
+}
+
+/** Remote: list one directory level for the browse flow. */
+export interface DevflowListDirRequest {
+  /** Absolute directory to list; null lists the home directory. */
+  readonly path: string | null
 }
 
 /** Model tool: next pump task description. */
@@ -263,6 +353,10 @@ export interface DevflowPumpTask {
   readonly type: 'implement' | 'fix-code' | 'verify' | 'merge'
   readonly itemId: string
   readonly title: string
+  /** Owning project partition key. */
+  readonly project: string
+  /** Owning project's workspace root (absolute). */
+  readonly projectRoot: string
   readonly size: DevflowSize | null
   readonly design: string | null
   readonly plan: string | null

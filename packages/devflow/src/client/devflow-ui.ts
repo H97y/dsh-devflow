@@ -11,7 +11,8 @@
 
 import { useSyncExternalStore } from 'react'
 import type {
-  DevflowAnswer, DevflowPromptsView, DevflowView,
+  DevflowAnswer, DevflowDirListing, DevflowPickCapabilityResult, DevflowPromptsView,
+  DevflowProjectAddResult, DevflowView,
 } from '../types.ts'
 
 /**
@@ -45,15 +46,29 @@ export async function callRemote<T>(call: Promise<RemoteResult<T>>): Promise<T> 
 
 /** The generated devflow Remote namespace this UI consumes (type face only). */
 export interface DevflowRemote {
-  state(): Promise<RemoteResult<DevflowView>>
-  submit(request: { kind: 'requirement' | 'bug'; text: string }): Promise<RemoteResult<{ ok: boolean; id: string }>>
+  state(request: { project: string | null }): Promise<RemoteResult<DevflowView>>
+  submit(request: {
+    kind: 'requirement' | 'bug'
+    text: string
+    project: string | null
+  }): Promise<RemoteResult<{ ok: boolean; id: string }>>
   answer(request: { itemId: string; stage: string | null; answers: DevflowAnswer[] }): Promise<RemoteResult<{ ok: boolean }>>
   cancel(request: { itemId: string }): Promise<RemoteResult<{ ok: boolean }>>
   resume(request: { itemId: string }): Promise<RemoteResult<{ ok: boolean }>>
   retry(request: { itemId: string }): Promise<RemoteResult<{ ok: boolean }>>
   artifact(request: { itemId: string; name: 'design' | 'plan' | 'report' | 'reviews' }): Promise<RemoteResult<string>>
-  prompts(): Promise<RemoteResult<DevflowPromptsView>>
-  'prompt-set'(request: { stage: string; template: string | null }): Promise<RemoteResult<{ ok: boolean }>>
+  prompts(request: { project: string | null }): Promise<RemoteResult<DevflowPromptsView>>
+  'prompt-set'(request: {
+    stage: string
+    template: string | null
+    project: string | null
+  }): Promise<RemoteResult<{ ok: boolean }>>
+  'project-add'(request: { path: string }): Promise<RemoteResult<DevflowProjectAddResult>>
+  'project-remove'(request: { key: string }): Promise<RemoteResult<{ ok: boolean; reason?: string }>>
+  'project-scan'(request: { rescan: boolean }): Promise<RemoteResult<{ ok: boolean }>>
+  'project-pick-capability'(): Promise<RemoteResult<DevflowPickCapabilityResult>>
+  'project-pick-native'(): Promise<RemoteResult<{ path: string | null }>>
+  'project-list-dir'(request: { path: string | null }): Promise<RemoteResult<DevflowDirListing>>
 }
 
 /** Render an unknown error value as short text without String(anything). */
@@ -77,10 +92,11 @@ export interface DevflowUiSnapshot {
 const POLL_MS = 1500
 
 /**
- * Client UI store: open flag plus the polled panel projection. Created once
- * per client-plugin activation in apply() and captured by both slot
- * registrations — never a module-level singleton, so a plugin reload drops
- * the old timer with the old subscriptions instead of leaking it.
+ * Client UI store: open flag plus the polled panel projection of the active
+ * project partition. Created once per client-plugin activation in apply()
+ * and captured by both slot registrations — never a module-level singleton,
+ * so a plugin reload drops the old timer with the old subscriptions instead
+ * of leaking it.
  */
 export class DevflowUiStore {
   readonly subscribe = (fn: () => void): (() => void) => {
@@ -99,6 +115,8 @@ export class DevflowUiStore {
   #snap: DevflowUiSnapshot = { open: false, view: null, offline: false }
   #timer: number | undefined
   #inFlight = false
+  /** Active project key; null until the first response adopts the server default. */
+  #projectKey: string | null = null
 
   /** @param remote - the generated Remote namespace captured from ctx. */
   constructor(remote: DevflowRemote) {
@@ -120,6 +138,17 @@ export class DevflowUiStore {
   /** Toggle the main-area page (the sidebar-foot trigger's click action). */
   toggle(): void {
     this.#emit(!this.#snap.open, this.#snap.view, this.#snap.offline)
+  }
+
+  /**
+   * Switch the polled project partition; a response still in flight for the
+   * previous partition is dropped (and immediately re-polled) so the panel
+   * never flashes the wrong project's pool.
+   */
+  setProject(key: string): void {
+    if (this.#projectKey === key) return
+    this.#projectKey = key
+    this.refresh()
   }
 
   /** Ask for an immediate refresh on top of the cadence (after mutations). */
@@ -148,13 +177,37 @@ export class DevflowUiStore {
   #poll(): void {
     if (this.#inFlight) return
     this.#inFlight = true
-    callRemote(this.#remote.state()).then((view) => {
+    const requested = this.#projectKey
+    callRemote(this.#remote.state({ project: requested })).then((view) => {
       this.#inFlight = false
+      // A partition switch during the call makes this response stale.
+      if (requested !== this.#projectKey) {
+        this.#poll()
+        return
+      }
+      // First load adopts the server's default partition so the switcher
+      // and the store agree from the very first paint; a mismatch on a
+      // later poll means the server fell back (the selected project was
+      // removed) — adopt the fallback instead of erroring.
+      if (view.project !== null) this.#projectKey = view.project
       this.#emit(this.#snap.open, view, false)
     }, (error: unknown) => {
       this.#inFlight = false
+      if (requested !== this.#projectKey) {
+        this.#poll()
+        return
+      }
       const fallback = this.#snap.view === null
-        ? { busy: false, note: null, error: errorText(error), items: [] }
+        ? {
+          busy: false,
+          note: null,
+          error: errorText(error),
+          project: null,
+          projects: [],
+          ignoredRoots: [],
+          waitingTotal: 0,
+          items: [],
+        }
         : this.#snap.view
       this.#emit(this.#snap.open, fallback, true)
     })

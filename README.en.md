@@ -2,7 +2,7 @@
 
 An automated development pipeline plugin for DeepSeek Harness: requirement pool → LLM batch refinement (with size assessment) → best-candidate selection → design → plan → review & revision loops (≤3 rounds) → implementation (small items in the main workspace / medium-large items in worktrees) → code review loops (≤3 rounds) → web verification → integration-branch merge back to main → development report.
 
-Every potentially blocking decision is made automatically by the model following project conventions by default; the few that genuinely need a human ruling enter the per-stage waiting queue and auto-resume once answered on the page. All state persists under `<root>/.devflow/`.
+Every potentially blocking decision is made automatically by the model following project conventions by default; the few that genuinely need a human ruling enter the per-stage waiting queue and auto-resume once answered on the page. All state persists under `<root>/.devflow/`. Requirement pools are isolated per project with zero configuration: projects under the workspace are auto-discovered, any folder can be added or removed from the panel, and multiple projects' pipelines run in parallel.
 
 The browser side is a native embedded UI (not a floating popup): an entry at the sidebar foot (same level as "Settings") opens a full main-area workbench page. The plugin mounts its own generated Remote namespace, modifies no harness product source, and works out of the box with `pnpm add`.
 
@@ -11,15 +11,16 @@ The browser side is a native embedded UI (not a floating popup): an entry at the
 ```
 ├── package.json / pnpm-workspace.yaml / tsconfig.{host,client}.json   # repo shell and aggregate build graph
 ├── packages/devflow/          # publishable package dsh-devflow
-│   ├── src/index.ts           # host service: state machine + LLM stages + devflow model tool
+│   ├── src/index.ts           # host service: per-project state machines + LLM stages + devflow model tool
+│   ├── src/projects.ts        # project markers + partition identity (key derivation)
 │   ├── src/prompts.ts         # 9-stage default prompts + {{variable}} rendering
 │   ├── src/types.ts           # public types
-│   ├── src/client/            # browser UI (sidebar entry + main-area page)
+│   ├── src/client/            # browser UI (sidebar entry + main-area page with project switcher)
 │   └── lib/typert.*           # vendored wire artifacts (see below)
 └── scripts/
     ├── tsdown.client.ts       # browser-bundle preset vendored from harness
     ├── platform.ts            # vendored platform-module table
-    ├── vendor-typert.sh       # copy + rename the typert quartet from harness (manual)
+    ├── vendor-typert.sh       # legacy: copy + rename the typert quartet from harness (manual)
     └── sync-to-profile.sh     # dev loop: link into the dsh profile + rebuild this repo
 ```
 
@@ -34,7 +35,7 @@ pnpm sync:profile                         # link into the profile (restart dsh w
 
 Day-to-day iteration: edit code → `pnpm build` → reload the browser page (no restart, no harness involvement).
 
-**Why the typert wire artifacts are vendored**: the generator's workspace discovery depends on the harness monorepo layout (aggregate tsconfig references + the `<root>/packages/` directory-membership check) and cannot be driven inside a single-package repo. When the `@Remote` method surface changes: temporarily copy `packages/devflow` into some harness checkout's `packages/` and rebuild; `scripts/vendor-typert.sh` then copies the regenerated `lib/typert.*` back into this repo, renaming `@deepseek-ai/dsh-devflow` → `dsh-devflow` for commit. Once the npm releases catch up with the checkout, this can switch to depending on the npm package directly.
+**Why the typert wire artifacts are vendored & how to regenerate**: the generator's workspace discovery requires the analyzed package and `@deepseek-ai/dsh-typert-protocol` to sit as real directories under one `<root>/packages/` (its `@Remote` recognition resolves the decorator symbol against registered packages). When the `@Remote` method surface changes, run `pnpm --filter dsh-devflow run gen:typert`: it assembles a throwaway workspace (`.typert-gen/`, git-ignored) with real copies of this package and the protocol package plus a temp aggregate that pins the protocol import to the local copy, regenerates the quartet straight into `wire/`, and cleans up — the harness checkout stays read-only. (`scripts/vendor-typert.sh`, the older copy-into-harness dance, remains as a fallback.)
 
 ## Quick start (install and first use)
 
@@ -79,19 +80,33 @@ pnpm sync:profile        # link into ~/.dsh/profiles/web (DSH_PROFILE picks anot
 
 ### Configure the workspace
 
-`root` defaults to the process working directory; to point it at a specific
-workspace, override it in your profile patch layer
-(`~/.dsh/profiles/web/cordis.patch.yml`):
+`root` defaults to the process working directory — point it at your projects
+folder and you are done (nothing else to configure); to override it, edit
+your profile patch layer (`~/.dsh/profiles/web/cordis.patch.yml`):
 
 ```yaml
 - id: devflow
   config:
-    root: /path/to/your/workspace   # where .devflow/ state and the small-item workspace live
-    # maxActive: 3                  # concurrent pipeline cap (default 3)
-    # maxWorktrees: 2               # concurrent worktree cap (default 2)
+    root: /path/to/your/projects   # discovery scans here; the default project's .devflow/ lives under it
+    # maxActive: 3                  # concurrent pipeline cap per project (default 3)
+    # maxWorktrees: 2               # concurrent worktree cap per project (default 2)
     # logCap: 40                    # per-item log cap (default 40)
     # tickIntervalMs: 2000          # state machine tick (default 2000)
 ```
+
+**Auto-discovery & panel management (zero config)**: the plugin scans `root`
+for standalone project folders (directories carrying `.git` /
+`package.json` / `go.mod`-style markers; a root that is itself a single repo
+counts as one project, a projects folder is scanned two levels deep for
+`~/projects/group/repo` layouts) and lists them in the top-right switcher —
+every project runs a fully isolated pool, `.devflow/` state, prompt
+overrides, tick lane, and main-workspace/worktree budget, all in parallel.
+Projects elsewhere are added through the「＋」beside the switcher: the OS
+directory chooser, the in-app browse flow, or a pasted path (the same
+picking capability the workspace manager uses), and can be removed or
+restored at any time; manual adds and hides persist in
+`<root>/.devflow/projects.json`. Item ids embed the project key
+(`<key>-r<n>`), so panel operations and pump reports route automatically.
 
 ### Verify and first run
 
