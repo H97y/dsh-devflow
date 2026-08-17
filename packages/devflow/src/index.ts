@@ -151,7 +151,7 @@ export class DevflowService extends TypertRemoteService {
   private readonly maxWorktrees: number
   private readonly logCap: number
   private store: DevflowState | null = null
-  private loaded = false
+  private loading: Promise<void> | null = null
   private busy = false
   private cooldown = 0
   private customPrompts: Record<string, string> = {}
@@ -380,13 +380,15 @@ export class DevflowService extends TypertRemoteService {
   /** One state-machine beat: refine, admit, allocate, advance one auto stage. */
   private async tick(): Promise<void> {
     if (this.busy) return
-    await this.ensureLoaded()
-    if (this.cooldown > 0) {
-      this.cooldown--
-      return
-    }
+    // 互斥须覆盖 ensureLoaded 阶段：否则上一跳仍在加载 store 时，
+    // 下一跳已越过 busy 检查闯入状态机主体
     this.busy = true
     try {
+      await this.ensureLoaded()
+      if (this.cooldown > 0) {
+        this.cooldown--
+        return
+      }
       const state = this.requireState()
       if (state.items.some(i => i.status === 'raw' || i.status === 'refining')) {
         await this.withAbort(async () => this.runRefine(), (error) => {
@@ -463,6 +465,12 @@ export class DevflowService extends TypertRemoteService {
 
   /** Persist a stage failure onto the running item unless it was intentional. */
   private async recordTickFailure(error: unknown): Promise<void> {
+    // state 尚未加载时无法落盘任何失败信息，只记日志；
+    // 这里再抛错会把可恢复的 tick 失败放大成进程级 fatal
+    if (this.store === null) {
+      this.ctx.logger.error('devflow: tick failed before state loaded: %s', describeUnknown(error))
+      return
+    }
     const running = this.requireState().items.find(i => i.status === 'active' && i.pipeline?.running === true)
     const intentional = running !== undefined && this.cancelRequestedId === running.id
     this.cancelRequestedId = null
@@ -946,10 +954,19 @@ export class DevflowService extends TypertRemoteService {
     return service.currentSelection()
   }
 
-  /** Load persisted state and prompts on first touch. */
+  /** Load persisted state and prompts on first touch; concurrent callers share one load. */
   private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return
-    this.loaded = true
+    // 缓存进行中的 promise 而非布尔标志：并发调用者等待同一次加载，
+    // 而不是在加载完成前被“已加载”的假象放行后撞上未就绪的 store
+    this.loading ??= this.loadFromDisk().catch((error: unknown) => {
+      this.loading = null // 失败后清空缓存，下次调用可重试，避免永久卡死
+      throw error
+    })
+    await this.loading
+  }
+
+  /** Read `.devflow/state.json` and `prompts.json` into memory. */
+  private async loadFromDisk(): Promise<void> {
     const raw = await this.readFile(['state.json'])
     this.store = raw !== null ? JSON.parse(raw) as DevflowState : this.freshState()
     if (typeof this.store.mainBusy !== 'string') this.store.mainBusy = null
