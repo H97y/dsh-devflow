@@ -37,6 +37,7 @@
     }
   },
   "files": [
+    "cordis.patch.yml",
     "lib/index.js",
     "lib/invariant.js",
     "lib/client.js",
@@ -48,6 +49,9 @@
     "lib/typert.remote-client.d.ts"
   ],
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-runtime",

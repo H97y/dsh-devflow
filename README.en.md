@@ -38,23 +38,41 @@ Day-to-day iteration: edit code → `pnpm build` → reload the browser page (no
 
 ## Installation (end users)
 
+Once published to npm, one command handles both the dependency and the
+composition wiring (the `dsh.bundle` manifest + the in-package
+`cordis.patch.yml` take effect automatically):
+
+```bash
+dsh plugin --profile web add dsh-devflow
+```
+
+`root` defaults to the process working directory; to point it at a specific
+workspace, override it in your own profile patch layer
+(`~/.dsh/profiles/web/cordis.patch.yml`):
+
+```yaml
+- id: devflow
+  config:
+    root: /path/to/your/workspace   # where .devflow/ state and the small-item workspace live
+    # maxActive: 3                  # concurrent pipeline cap (default 3)
+    # maxWorktrees: 2               # concurrent worktree cap (default 2)
+    # logCap: 40                    # per-item log cap (default 40)
+    # tickIntervalMs: 2000          # state machine tick (default 2000)
+```
+
+Manual equivalent before the npm release:
+
 ```bash
 cd ~/.dsh/profiles/web
 pnpm add dsh-devflow
 ```
 
-Add to `cordis.patch.yml`:
+and add the insert row to `cordis.patch.yml`:
 
 ```yaml
 - insert:
     - id: devflow
       name: dsh-devflow
-      config:
-        root: /path/to/your/workspace   # where .devflow/ state and the small-item workspace live
-        # maxActive: 3                  # concurrent pipeline cap (default 3)
-        # maxWorktrees: 2               # concurrent worktree cap (default 2)
-        # logCap: 40                    # per-item log cap (default 40)
-        # tickIntervalMs: 2000          # state machine tick (default 2000)
 ```
 
 The browser UI mounts in two additive places: the entry button registers in `sidebar.footer.action` (sidebar foot, beside Settings, styled to match the native trigger rows; collapses to a 56px rail circle, carries a waiting-decision count badge); clicking it opens a full main-area page through `shell.overlay` (anchored to the sidebar's live right edge, tracking drags/collapses; a two-column master-detail layout — pool column with grouped sections on the left, item detail / artifact viewer / stage prompt editor on the right; Escape unwinds level by level). The browser half `$mount`s this package's generated `/remote` artifact itself — the `remote.devflow` namespace is mounted by the plugin, with no host-assembly wiring, so the npm install path works as-is. The `devflow` model tool (`next` / `report`) is called by the session pump to execute implement / fix-code / verify / merge tasks.

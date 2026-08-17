@@ -51,23 +51,39 @@ checkout 后可改为直接依赖 npm 包。
 
 ## 安装（最终用户）
 
+发布到 npm 后，一条命令完成依赖安装与组合接线（`dsh.bundle` manifest + 包内
+`cordis.patch.yml` 自动生效）：
+
+```bash
+dsh plugin --profile web add dsh-devflow
+```
+
+`root` 默认取进程工作目录；如需指向特定工作区，在你自己的 profile patch 层
+覆盖（`~/.dsh/profiles/web/cordis.patch.yml`）：
+
+```yaml
+- id: devflow
+  config:
+    root: /path/to/your/workspace   # .devflow/ 状态与小需求工作区所在
+    # maxActive: 3                  # 并发流水线上限（默认 3）
+    # maxWorktrees: 2               # worktree 并发上限（默认 2）
+    # logCap: 40                    # 每条需求日志上限（默认 40）
+    # tickIntervalMs: 2000          # 状态机节拍（默认 2000）
+```
+
+npm 发布前的手动等效安装：
+
 ```bash
 cd ~/.dsh/profiles/web
 pnpm add dsh-devflow
 ```
 
-`cordis.patch.yml` 增加：
+并在 `cordis.patch.yml` 增加插入行：
 
 ```yaml
 - insert:
     - id: devflow
       name: dsh-devflow
-      config:
-        root: /path/to/your/workspace   # .devflow/ 状态与小需求工作区所在
-        # maxActive: 3                  # 并发流水线上限（默认 3）
-        # maxWorktrees: 2               # worktree 并发上限（默认 2）
-        # logCap: 40                    # 每条需求日志上限（默认 40）
-        # tickIntervalMs: 2000          # 状态机节拍（默认 2000）
 ```
 
 浏览器界面分两处挂载：入口按钮注册在 `sidebar.footer.action`（侧边栏底部、

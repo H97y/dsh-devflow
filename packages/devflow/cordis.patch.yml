@@ -1,0 +1,7 @@
+# Bundle patch applied when the plugin is installed through `dsh plugin add`:
+# one insert row, zero required config (`root` defaults to the process working
+# directory; point it at your workspace in your own profile patch layer to
+# override — see the README's installation section).
+- insert:
+    - id: devflow
+      name: dsh-devflow
