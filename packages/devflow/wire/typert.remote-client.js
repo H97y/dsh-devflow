@@ -25,6 +25,34 @@ const dsh_devflow_devflow_cancel_result$schema = z.object({
   'ok': z.boolean().readonly(),
   'reason': z.union([z.undefined(), z.string()]).readonly().optional(),
 })
+const dsh_devflow_devflow_config_get_parameter_0$schema = z.object({
+  'project': z.union([z.literal(null), z.string()]).readonly(),
+})
+const dsh_devflow_devflow_config_get_result$schema = z.object({
+  'settings': z.object({
+  'version': z.literal(1).readonly(),
+  'stageModels': z.record(z.string(), z.string()).readonly().readonly(),
+}).readonly(),
+  'warnings': z.array(z.string()).readonly(),
+})
+const dsh_devflow_devflow_config_models_parameter_0$schema = z.object({
+  'project': z.union([z.literal(null), z.string()]).readonly(),
+})
+const dsh_devflow_devflow_config_models_result$schema = z.array(z.object({
+  'id': z.string().readonly(),
+  'label': z.string().readonly(),
+}))
+const dsh_devflow_devflow_config_set_parameter_0$schema = z.object({
+  'project': z.union([z.literal(null), z.string()]).readonly(),
+  'settings': z.object({
+  'version': z.literal(1).readonly(),
+  'stageModels': z.record(z.string(), z.string()).readonly().readonly(),
+}).readonly(),
+})
+const dsh_devflow_devflow_config_set_result$schema = z.object({
+  'version': z.literal(1).readonly(),
+  'stageModels': z.record(z.string(), z.string()).readonly().readonly(),
+})
 const dsh_devflow_devflow_project_add_parameter_0$schema = z.object({
   'path': z.string().readonly(),
 })
@@ -192,7 +220,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_answer_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":300,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":414,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/artifact',
@@ -217,7 +245,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow#devflow/artifact:result',
         schema: dsh_devflow_devflow_artifact_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":391,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":505,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/cancel',
@@ -242,7 +270,85 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_cancel_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":328,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":442,"column":9},
+    },
+    {
+      id: 'dsh-devflow#devflow/config.get',
+      service: 'devflow',
+      namespace: 'devflow',
+      method: 'config.get',
+      implementation: 'configGet',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-devflow/types#DevflowStateRequest',
+            schema: dsh_devflow_devflow_config_get_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-devflow/types#DevflowSettingsView',
+        schema: dsh_devflow_devflow_config_get_result$schema,
+      },
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":546,"column":9},
+    },
+    {
+      id: 'dsh-devflow#devflow/config.models',
+      service: 'devflow',
+      namespace: 'devflow',
+      method: 'config.models',
+      implementation: 'configModels',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: '_request',
+          wire: '_request',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-devflow/types#DevflowStateRequest',
+            schema: dsh_devflow_devflow_config_models_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-devflow#devflow/config.models:result',
+        schema: dsh_devflow_devflow_config_models_result$schema,
+      },
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":591,"column":9},
+    },
+    {
+      id: 'dsh-devflow#devflow/config.set',
+      service: 'devflow',
+      namespace: 'devflow',
+      method: 'config.set',
+      implementation: 'configSet',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-devflow/types#DevflowConfigSetRequest',
+            schema: dsh_devflow_devflow_config_set_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-devflow/types#DevflowSettings',
+        schema: dsh_devflow_devflow_config_set_result$schema,
+      },
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":565,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-add',
@@ -268,7 +374,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowProjectAddResult',
         schema: dsh_devflow_devflow_project_add_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":432,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":597,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-list-dir',
@@ -294,7 +400,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowDirListing',
         schema: dsh_devflow_devflow_project_list_dir_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":508,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":673,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-pick-capability',
@@ -310,7 +416,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowPickCapabilityResult',
         schema: dsh_devflow_devflow_project_pick_capability_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":479,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":644,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-pick-native',
@@ -326,7 +432,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowPickNativeResult',
         schema: dsh_devflow_devflow_project_pick_native_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":492,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":657,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-remove',
@@ -352,7 +458,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_project_remove_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":451,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":616,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/project-scan',
@@ -378,7 +484,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_project_scan_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":472,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":637,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/prompt-set',
@@ -404,7 +510,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_prompt_set_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":414,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":528,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/prompts',
@@ -429,7 +535,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowPromptsView',
         schema: dsh_devflow_devflow_prompts_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":405,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":519,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/resume',
@@ -454,7 +560,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_resume_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":360,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":474,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/retry',
@@ -479,7 +585,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowMutationResult',
         schema: dsh_devflow_devflow_retry_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":374,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":488,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/state',
@@ -504,7 +610,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowView',
         schema: dsh_devflow_devflow_state_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":256,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":370,"column":9},
     },
     {
       id: 'dsh-devflow#devflow/submit',
@@ -529,7 +635,7 @@ export const TYPERT_REMOTE = {
         typeSymbol: 'dsh-devflow/types#DevflowSubmitResult',
         schema: dsh_devflow_devflow_submit_result$schema,
       },
-      sourceLocation: {"file":"packages/devflow/src/index.ts","line":268,"column":9},
+      sourceLocation: {"file":"packages/devflow/src/index.ts","line":382,"column":9},
     },
   ],
 }

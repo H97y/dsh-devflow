@@ -108,6 +108,26 @@ restored at any time; manual adds and hides persist in
 `<root>/.devflow/projects.json`. Item ids embed the project key
 (`<key>-r<n>`), so panel operations and pump reports route automatically.
 
+### Per-stage model configuration
+
+The workbench header's "设置" (Settings) opens the unified settings pane:
+every pipeline stage (refine / design / plan / review / code review /
+report) can pick its own model, with candidates read-only from the models
+configured in harness (the plugin manages no API keys). Unset stages fall
+back to the harness-active model; a configured model later removed from
+harness falls back at runtime and is flagged as drifted in the pane.
+Saves take effect immediately and persist to `<root>/.devflow/settings.json`
+(runtime state, untracked by git).
+
+Reset semantics: **deleting settings.json re-imports legacy settings
+rather than resetting to defaults**; to reset, edit the file content to
+`{"version":1,"stageModels":{}}`.
+
+Panel scope: prompt templates keep their own「提示词」entry in the workbench
+(content configuration, not migrated into the settings pane); host-level
+settings (`root`, concurrency caps) live in the profile patch layer and
+are not the panel's business.
+
 ### Verify and first run
 
 1. (After a first install or composition change) restart `dsh web` and open

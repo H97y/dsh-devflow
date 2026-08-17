@@ -17,8 +17,9 @@ import {
   IconPlusOutline16, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  DevflowAnswer, DevflowDirListing, DevflowItemView, DevflowPromptsView,
-  DevflowQuestion, DevflowView,
+  DevflowAnswer, DevflowDirListing, DevflowItemView, DevflowModelInfo,
+  DevflowPromptsView, DevflowQuestion, DevflowSettings, DevflowSettingsView,
+  DevflowView,
 } from '../types.ts'
 import type { DevflowRemote, DevflowUiStore, RemoteResult } from './devflow-ui.ts'
 import { callRemote, errorText, useDevflowUi } from './devflow-ui.ts'
@@ -67,6 +68,16 @@ const PROMPT_STAGE: Record<string, string> = {
   codeReview: '代码评审',
   report: '开发报告',
 }
+
+/** Settings-panel stage list (mirrors the host's StageId set). */
+const MODEL_STAGES: readonly (readonly [id: string, label: string])[] = [
+  ['refine', '需求精炼'],
+  ['design', '设计'],
+  ['plan', '计划'],
+  ['review', '评审·设计计划'],
+  ['codeReview', '代码评审'],
+  ['report', '开发报告'],
+]
 
 /** Badge tone → css class (kept explicit so every tone is checked here). */
 const TONE = {
@@ -297,6 +308,119 @@ function ArtifactPane({ title, text, onBack }: {
         <b className={css.paneTitle}>{title}</b>
       </div>
       <div className={css.paneScroll}><pre className={css.artifact}>{text}</pre></div>
+    </div>
+  )
+}
+
+/** Unified settings pane (right pane mode): per-stage model overrides. */
+function SettingsPane({ remote, project, onBack }: {
+  remote: DevflowRemote
+  project: string | null
+  onBack: () => void
+}): JSX.Element {
+  const [settings, setSettings] = useState<DevflowSettings | null>(null)
+  const [warnings, setWarnings] = useState<readonly string[]>([])
+  const [models, setModels] = useState<readonly DevflowModelInfo[] | null>(null)
+  const [modelsError, setModelsError] = useState('')
+  const [status, setStatus] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    setSettings(null)
+    setModels(null)
+    setModelsError('')
+    setStatus('')
+    callRemote(remote['config.get']({ project })).then((view: DevflowSettingsView) => {
+      if (cancelled) return
+      setSettings(view.settings)
+      setWarnings(view.warnings)
+      setDraft({ ...view.settings.stageModels })
+    }, (error: unknown) => {
+      if (!cancelled) setStatus(`加载失败: ${errorText(error)}`)
+    }).catch(() => undefined)
+    callRemote(remote['config.models']({ project })).then((list: readonly DevflowModelInfo[]) => {
+      if (cancelled) return
+      setModels(list)
+    }, (error: unknown) => {
+      if (!cancelled) setModelsError(errorText(error))
+    }).catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [remote, project])
+
+  const save = useCallback(() => {
+    if (settings === null) return
+    setSaving(true)
+    setStatus('保存中…')
+    const next: DevflowSettings = {
+      version: 1,
+      stageModels: Object.fromEntries(Object.entries(draft).filter(([, v]) => v !== '')),
+    }
+    callRemote(remote['config.set']({ project, settings: next })).then((saved: DevflowSettings) => {
+      setSaving(false)
+      setSettings(saved)
+      setDraft({ ...saved.stageModels })
+      setWarnings([])
+      setStatus('已保存 ✓ 即时生效')
+    }, (error: unknown) => {
+      setSaving(false)
+      setStatus(`保存失败: ${errorText(error)}`)
+    }).catch(() => undefined)
+  }, [remote, project, settings, draft])
+
+  // Three-state degradation (D21): empty catalog, call failure, and drift
+  // are distinct conditions and must not be conflated.
+  const catalogEmpty = models !== null && models.length === 0
+  const knownIds = new Set(models?.map(m => m.id) ?? [])
+  const stale = (id: string): boolean => models !== null && models.length > 0 && id !== '' && !knownIds.has(id)
+
+  return (
+    <div className={css.pane}>
+      <div className={css.paneHead}>
+        <Button variant="ghost" size="sm" icon={<IconChevronLeftOutline14 size={14} />} onClick={onBack}>返回</Button>
+        <b className={css.paneTitle}>设置 · 阶段模型</b>
+      </div>
+      <div className={css.paneScroll}>
+        {warnings.map((warning, index) => (
+          <div key={index} className={css.errorText}>{`⚠ ${warning}`}</div>
+        ))}
+        <div className={css.muted}>
+          未配置的阶段使用 harness 当前模型；候选只读自 harness 已配置模型。实施 / 修复 / Web 验证 / 合并阶段由会话泵执行，模型跟随当前会话，不在此配置。
+        </div>
+        {modelsError !== ''
+          ? <div className={css.errorText}>{`⚠ 模型列表加载失败: ${modelsError}`}</div>
+          : null}
+        {catalogEmpty
+          ? <div className={css.muted}>harness 暂无已配置模型，暂不能选择阶段模型（不影响回退运行）。</div>
+          : null}
+        {MODEL_STAGES.map(([stage, label]) => (
+          <div key={stage} className={css.settingsRow}>
+            <label className={css.settingsLabel}>{label}</label>
+            <select
+              className={css.select}
+              value={draft[stage] ?? ''}
+              onChange={(event) => { setDraft({ ...draft, [stage]: event.target.value }) }}
+            >
+              <option value="">（回退 harness 当前模型）</option>
+              {(models ?? []).map(model => (
+                <option key={model.id} value={model.id}>{model.label}</option>
+              ))}
+            </select>
+            {stale(draft[stage] ?? '')
+              ? <span className={css.errorText}>已漂移，将回退当前模型</span>
+              : null}
+          </div>
+        ))}
+        <div className={css.actions}>
+          <Button variant="primary" size="sm" disabled={saving || settings === null} onClick={() => { save() }}>
+            {saving ? '保存中…' : '保存'}
+          </Button>
+        </div>
+        {status !== '' ? <div className={css.muted}>{status}</div> : null}
+      </div>
     </div>
   )
 }
@@ -653,11 +777,12 @@ function Section({ title, items, selectedId, onSelect }: {
   )
 }
 
-/** Right-pane mode: the selected item, an artifact, or the prompt editor. */
+/** Right-pane mode: the selected item, an artifact, the prompt editor, or settings. */
 type Pane =
   | { readonly kind: 'item' }
   | { readonly kind: 'artifact'; readonly title: string; readonly text: string }
   | { readonly kind: 'prompts' }
+  | { readonly kind: 'settings' }
 
 /**
  * The devflow main-area page. Rendered from the shell overlay layer; anchors
@@ -819,6 +944,7 @@ export function DevflowPage({ store, remote }: {
         >
           <IconPlusOutline16 size={14} />
         </Button>
+        <Button variant="ghost" size="sm" onClick={() => { setPane({ kind: 'settings' }) }}>设置</Button>
         <Button variant="ghost" size="sm" onClick={() => { setPane({ kind: 'prompts' }) }}>提示词</Button>
         <Button variant="ghost" size="sm" aria-label="关闭" onClick={() => { store.close() }}>
           <IconCloseOutline16 size={14} />
@@ -879,7 +1005,9 @@ export function DevflowPage({ store, remote }: {
           </div>
         </aside>
         <main className={css.detail}>
-          {pane.kind === 'prompts'
+          {pane.kind === 'settings'
+            ? <SettingsPane remote={remote} project={view?.project ?? null} onBack={() => { setPane({ kind: 'item' }) }} />
+            : pane.kind === 'prompts'
             ? <PromptPane remote={remote} project={view?.project ?? null} onBack={() => { setPane({ kind: 'item' }) }} />
             : pane.kind === 'artifact'
               ? <ArtifactPane title={pane.title} text={pane.text} onBack={() => { setPane({ kind: 'item' }) }} />

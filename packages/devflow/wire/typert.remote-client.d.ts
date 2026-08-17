@@ -3,13 +3,16 @@ import type {
   RemoteResult,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { DevflowAnswerRequest, DevflowArtifactRequest, DevflowDirListing, DevflowMutationResult, DevflowPickCapabilityResult, DevflowPickNativeResult, DevflowProjectAddRequest, DevflowProjectAddResult, DevflowProjectRemoveRequest, DevflowProjectScanRequest, DevflowPromptSetRequest, DevflowPromptsView, DevflowStateRequest, DevflowSubmitRequest, DevflowSubmitResult, DevflowView } from 'dsh-devflow/types'
+import type { DevflowAnswerRequest, DevflowArtifactRequest, DevflowConfigSetRequest, DevflowDirListing, DevflowModelInfo, DevflowMutationResult, DevflowPickCapabilityResult, DevflowPickNativeResult, DevflowProjectAddRequest, DevflowProjectAddResult, DevflowProjectRemoveRequest, DevflowProjectScanRequest, DevflowPromptSetRequest, DevflowPromptsView, DevflowSettings, DevflowSettingsView, DevflowStateRequest, DevflowSubmitRequest, DevflowSubmitResult, DevflowView } from 'dsh-devflow/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$646576666c6f77 {
     answer: (request: DevflowAnswerRequest) => Promise<RemoteResult<DevflowMutationResult>>
     artifact: (request: DevflowArtifactRequest) => Promise<RemoteResult<string>>
     cancel: (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
+    'config.get': (request: DevflowStateRequest) => Promise<RemoteResult<DevflowSettingsView>>
+    'config.models': (_request: DevflowStateRequest) => Promise<RemoteResult<readonly DevflowModelInfo[]>>
+    'config.set': (request: DevflowConfigSetRequest) => Promise<RemoteResult<DevflowSettings>>
     'project-add': (request: DevflowProjectAddRequest) => Promise<RemoteResult<DevflowProjectAddResult>>
     'project-list-dir': (request: { path: string | null; }) => Promise<RemoteResult<DevflowDirListing>>
     'project-pick-capability': () => Promise<RemoteResult<DevflowPickCapabilityResult>>
@@ -27,6 +30,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'devflow/answer': (request: DevflowAnswerRequest) => Promise<RemoteResult<DevflowMutationResult>>
     'devflow/artifact': (request: DevflowArtifactRequest) => Promise<RemoteResult<string>>
     'devflow/cancel': (request: { itemId: string; }) => Promise<RemoteResult<DevflowMutationResult>>
+    'devflow/config.get': (request: DevflowStateRequest) => Promise<RemoteResult<DevflowSettingsView>>
+    'devflow/config.models': (_request: DevflowStateRequest) => Promise<RemoteResult<readonly DevflowModelInfo[]>>
+    'devflow/config.set': (request: DevflowConfigSetRequest) => Promise<RemoteResult<DevflowSettings>>
     'devflow/project-add': (request: DevflowProjectAddRequest) => Promise<RemoteResult<DevflowProjectAddResult>>
     'devflow/project-list-dir': (request: { path: string | null; }) => Promise<RemoteResult<DevflowDirListing>>
     'devflow/project-pick-capability': () => Promise<RemoteResult<DevflowPickCapabilityResult>>

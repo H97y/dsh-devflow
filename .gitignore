@@ -7,3 +7,5 @@ todo_list/
 .typert-gen/
 AGENTS.md
 .devflow/
+packages/devflow/node_modules
+.worktrees/
