@@ -30,7 +30,11 @@
       "default": "./lib/typert.remote-client.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    }
   },
   "files": [
     "lib/index.js",
@@ -48,8 +52,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-sidebar",
-        "@deepseek-ai/dsh-api-remotes"
+        "@deepseek-ai/dsh-client-ui-sidebar"
       ],
       "platform": "web"
     }
@@ -69,7 +72,6 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-agent": ">=0.1.0-rc.6",
     "@deepseek-ai/dsh-agent-default-model": ">=0.0.1-rc.1",
-    "@deepseek-ai/dsh-api-remotes": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-client-runtime": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-client-ui-layout": ">=0.0.1-rc.1",
     "@deepseek-ai/dsh-client-ui-primitives": ">=0.0.1-rc.1",

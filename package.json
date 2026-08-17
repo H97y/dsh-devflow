@@ -5,7 +5,7 @@
   "scripts": {
     "build": "pnpm --filter dsh-devflow run build",
     "test": "pnpm --filter dsh-devflow run test",
-    "sync:harness": "bash scripts/sync-to-harness.sh"
+    "sync:profile": "bash scripts/sync-to-profile.sh"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-devflow": "link:./packages/devflow",

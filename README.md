@@ -19,24 +19,31 @@ DeepSeek Harness 的自动开发流水线插件：需求池 → LLM 批量精炼
 └── scripts/
     ├── tsdown.client.ts       # vendored 自 harness 的浏览器 bundle 预设
     ├── platform.ts            # vendored 平台模块表
-    ├── vendor-typert.sh       # 从 harness 拷贝并改名 typert 四件套
-    └── sync-to-harness.sh     # 开发回路：同步源码 → 重建 harness → 回收 typert
+    ├── vendor-typert.sh       # 从 harness 拷贝并改名 typert 四件套（手动）
+    └── sync-to-profile.sh     # 开发回路：link 进 dsh profile + 重建本仓库
 ```
 
-## 开发回路（依赖本地 harness checkout）
+## 开发回路（只读使用本地 harness checkout）
 
 迭代期依赖用 `link:` 指向本地 `deepseek-harness` checkout（其 npm 版本目前落后于
-checkout），路径硬编码在 `packages/devflow/package.json`，可按需调整。
+checkout），路径硬编码在 `packages/devflow/package.json`，可按需调整。**harness
+checkout 保持零改动**：插件以 link 安装进 `~/.dsh/profiles/web`，组合行
+`dsh-devflow` 经 profile 的 node_modules 解析到本仓库；web 服务器的 `/plugins`
+路由直接从本仓库 `lib/client.js` 读文件（no-cache）。
 
 ```bash
 pnpm install && pnpm build && pnpm test   # 本仓库独立可构建
-pnpm sync:harness                         # 源码同步进 harness 并重建挂载产物
+pnpm sync:profile                         # link 进 profile（首次/组合变化后需重启 dsh web）
 ```
+
+日常迭代：改代码 → `pnpm build` → 浏览器刷新即可（无需重启，无需碰 harness）。
 
 **Typert wire 工件为什么是 vendored**：生成器的 workspace 发现依赖 harness monorepo
 布局（聚合 tsconfig 引用 + `<root>/packages/` 目录包含检查），无法在单包仓库内驱动。
-`@Remote` 方法面变化后运行 `pnpm sync:harness`，它会重建 harness 并把重新生成的
-`lib/typert.*` 改名（`@deepseek-ai/dsh-devflow` → `dsh-devflow`）后提交回本仓库。
+`@Remote` 方法面变化时：临时把 `packages/devflow` 拷进某个 harness checkout 的
+`packages/` 下重建，`scripts/vendor-typert.sh` 会把重新生成的 `lib/typert.*` 改名
+（`@deepseek-ai/dsh-devflow` → `dsh-devflow`）后提交回本仓库；等 npm 版本追平
+checkout 后可改为直接依赖 npm 包。
 
 ## 安装（最终用户）
 
