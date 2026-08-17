@@ -3,9 +3,11 @@
  * sidebar (anchored to its live edge) instead of the old bottom-right
  * floating popup. Master-detail on the wide canvas — the left column holds
  * the requirement-pool entry plus the grouped pipeline sections, the right
- * pane shows the selected item's detail, a read-only artifact, or the stage
- * prompt editor. State arrives through the shared polled store; every
- * mutation is a plain Remote call followed by an immediate refresh.
+ * pane shows the selected item's detail or a read-only artifact. Global
+ * configuration (stage models, auto-pump, prompt templates) lives in the
+ * settings dialog raised from the sidebar-foot trigger row's gear, not
+ * here. State arrives through the shared polled store; every mutation is a
+ * plain Remote call followed by an immediate refresh.
  *
  * @module @deepseek-ai/dsh-devflow/client/page
  */
@@ -13,17 +15,13 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Button, IconChevronLeftOutline14, IconCloseOutline16, IconFolderClose16,
-  IconPlusOutline16, Modal,
+  Button, IconChevronLeftOutline14, IconCloseOutline16, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  DevflowAnswer, DevflowDirListing, DevflowItemView, DevflowModelInfo,
-  DevflowPromptsView, DevflowPumpView, DevflowQuestion, DevflowSettings, DevflowSettingsView,
-  DevflowView,
+  DevflowAnswer, DevflowDirListing, DevflowItemView, DevflowQuestion, DevflowView,
 } from '../types.ts'
 import type { DevflowRemote, DevflowUiStore, RemoteResult } from './devflow-ui.ts'
 import { callRemote, errorText, useDevflowUi } from './devflow-ui.ts'
-import { STAGE_IDS, STAGE_LABELS } from '../config/schema.ts'
 import css from './page.module.css'
 
 /** Sidebar fallback when the live edge cannot be measured (SIDEBAR_DEFAULT). */
@@ -56,19 +54,6 @@ const STAGE: Record<string, string> = {
 
 /** Chinese labels for implementation sizes. */
 const SIZE: Record<string, string> = { small: '小', medium: '中', large: '大' }
-
-/** Chinese labels for the editable prompt stages. */
-const PROMPT_STAGE: Record<string, string> = {
-  system: '系统提示词',
-  refine: '需求精炼',
-  design: '设计',
-  plan: '计划',
-  reviewDp: '评审·设计计划',
-  fixDesign: '修订设计',
-  fixPlan: '修订计划',
-  codeReview: '代码评审',
-  report: '开发报告',
-}
 
 /** Badge tone → css class (kept explicit so every tone is checked here). */
 const TONE = {
@@ -340,257 +325,6 @@ function ArtifactPane({ title, text, onBack }: {
   )
 }
 
-/** Unified settings pane (right pane mode): per-stage models + auto-pump. */
-function SettingsPane({ remote, project, pumpStatus, onBack }: {
-  remote: DevflowRemote
-  project: string | null
-  /** Live auto-pump projection from the polled view (status line only). */
-  pumpStatus: DevflowPumpView | null
-  onBack: () => void
-}): JSX.Element {
-  const [settings, setSettings] = useState<DevflowSettings | null>(null)
-  const [warnings, setWarnings] = useState<readonly string[]>([])
-  const [models, setModels] = useState<readonly DevflowModelInfo[] | null>(null)
-  const [modelsError, setModelsError] = useState('')
-  const [status, setStatus] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [draft, setDraft] = useState<Record<string, string>>({})
-  const [pumpOn, setPumpOn] = useState(false)
-  const [pumpModel, setPumpModel] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    setSettings(null)
-    setModels(null)
-    setModelsError('')
-    setStatus('')
-    callRemote(remote['config.get']({ project })).then((view: DevflowSettingsView) => {
-      if (cancelled) return
-      setSettings(view.settings)
-      setWarnings(view.warnings)
-      setDraft({ ...view.settings.stageModels })
-      setPumpOn(view.settings.pump?.enabled === true)
-      setPumpModel(view.settings.pump?.model ?? '')
-    }, (error: unknown) => {
-      if (!cancelled) setStatus(`加载失败: ${errorText(error)}`)
-    }).catch(() => undefined)
-    callRemote(remote['config.models']({ project })).then((list: readonly DevflowModelInfo[]) => {
-      if (cancelled) return
-      setModels(list)
-    }, (error: unknown) => {
-      if (!cancelled) setModelsError(errorText(error))
-    }).catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [remote, project])
-
-  const save = useCallback(() => {
-    if (settings === null) return
-    setSaving(true)
-    setStatus('保存中…')
-    const next: DevflowSettings = {
-      version: 1,
-      stageModels: Object.fromEntries(Object.entries(draft).filter(([, v]) => v !== '')),
-      pump: { enabled: pumpOn, model: pumpModel },
-    }
-    callRemote(remote['config.set']({ project, settings: next })).then((saved: DevflowSettings) => {
-      setSaving(false)
-      setSettings(saved)
-      setDraft({ ...saved.stageModels })
-      setPumpOn(saved.pump?.enabled === true)
-      setPumpModel(saved.pump?.model ?? '')
-      setWarnings([])
-      setStatus('已保存 ✓ 即时生效')
-    }, (error: unknown) => {
-      setSaving(false)
-      setStatus(`保存失败: ${errorText(error)}`)
-    }).catch(() => undefined)
-  }, [remote, project, settings, draft, pumpOn, pumpModel])
-
-  // Three-state degradation (D21): empty catalog, call failure, and drift
-  // are distinct conditions and must not be conflated.
-  const catalogEmpty = models !== null && models.length === 0
-  const knownIds = new Set(models?.map(m => m.id) ?? [])
-  const stale = (id: string): boolean => models !== null && models.length > 0 && id !== '' && !knownIds.has(id)
-
-  return (
-    <div className={css.pane}>
-      <div className={css.paneHead}>
-        <Button variant="ghost" size="sm" icon={<IconChevronLeftOutline14 size={14} />} onClick={onBack}>返回</Button>
-        <b className={css.paneTitle}>设置 · 阶段模型 / 自动泵</b>
-      </div>
-      <div className={css.paneScroll}>
-        {warnings.map((warning, index) => (
-          <div key={index} className={css.errorText}>{`⚠ ${warning}`}</div>
-        ))}
-        <div className={css.muted}>
-          未配置的阶段使用 harness 当前模型；候选只读自 harness 已配置模型。
-        </div>
-        {modelsError !== ''
-          ? <div className={css.errorText}>{`⚠ 模型列表加载失败: ${modelsError}`}</div>
-          : null}
-        {catalogEmpty
-          ? <div className={css.muted}>harness 暂无已配置模型，暂不能选择阶段模型（不影响回退运行）。</div>
-          : null}
-        {STAGE_IDS.map(stage => (
-          <div key={stage} className={css.settingsRow}>
-            <label className={css.settingsLabel}>{STAGE_LABELS[stage]}</label>
-            <select
-              className={css.select}
-              value={draft[stage] ?? ''}
-              onChange={(event) => { setDraft({ ...draft, [stage]: event.target.value }) }}
-            >
-              <option value="">（回退 harness 当前模型）</option>
-              {(models ?? []).map(model => (
-                <option key={model.id} value={model.id}>{model.label}</option>
-              ))}
-            </select>
-            {stale(draft[stage] ?? '')
-              ? <span className={css.errorText}>已漂移，将回退当前模型</span>
-              : null}
-          </div>
-        ))}
-        <div className={css.sectionTitle}>自动泵（工具阶段无人值守执行）</div>
-        {pumpStatus !== null && !pumpStatus.available
-          ? <div className={css.errorText}>⚠ 宿主未组装 agents 服务，自动泵不可用（实施/修复/验证/合并仍可手动泵）。</div>
-          : null}
-        <div className={css.muted}>
-          开启后，实施 / 修复 / Web 验证 / 合并阶段由插件直接派出的独立 agent 会话执行，无需专门挂一个泵会话；
-          agent 需要拍板时会在该会话里提问并等待你的答复（面板与侧栏均会亮起待答标记）。
-          {pumpStatus !== null
-            ? `当前：${pumpStatus.activeCount}/${pumpStatus.maxConcurrent} 个代理运行中（并发上限为部署配置）。`
-            : ''}
-        </div>
-        <div className={css.settingsRow}>
-          <label className={css.settingsLabel}>自动泵</label>
-          <Button
-            variant={pumpOn ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => { setPumpOn(!pumpOn) }}
-          >
-            {pumpOn ? '已开启' : '已关闭'}
-          </Button>
-          <span className={css.muted}>关闭后进行中的任务会跑完，不再派新代理。</span>
-        </div>
-        <div className={css.settingsRow}>
-          <label className={css.settingsLabel}>泵代理模型</label>
-          <select
-            className={css.select}
-            value={pumpModel}
-            onChange={(event) => { setPumpModel(event.target.value) }}
-          >
-            <option value="">（跟随 harness 当前模型）</option>
-            {(models ?? []).map(model => (
-              <option key={model.id} value={model.id}>{model.label}</option>
-            ))}
-          </select>
-          {stale(pumpModel)
-            ? <span className={css.errorText}>已漂移，将回退当前模型</span>
-            : null}
-        </div>
-        <div className={css.actions}>
-          <Button variant="primary" size="sm" disabled={saving || settings === null} onClick={() => { save() }}>
-            {saving ? '保存中…' : '保存'}
-          </Button>
-        </div>
-        {status !== '' ? <div className={css.muted}>{status}</div> : null}
-      </div>
-    </div>
-  )
-}
-
-/** Stage prompt editor (right pane mode): pick, edit, save, reset. */
-function PromptPane({ remote, project, onBack }: {
-  remote: DevflowRemote
-  project: string | null
-  onBack: () => void
-}): JSX.Element {
-  const [data, setData] = useState<DevflowPromptsView | null>(null)
-  const [stage, setStage] = useState('design')
-  const [text, setText] = useState('')
-  const [status, setStatus] = useState('')
-  useEffect(() => {
-    let cancelled = false
-    callRemote(remote.prompts({ project })).then((view) => {
-      if (cancelled) return
-      setData(view)
-      setText(view.custom.design ?? view.defaults.design ?? '')
-    }, (error: unknown) => {
-      if (!cancelled) setStatus(`加载失败: ${errorText(error)}`)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [remote, project])
-  const pick = (next: string): void => {
-    setStage(next)
-    setText(data === null ? '' : data.custom[next] ?? data.defaults[next] ?? '')
-    setStatus('')
-  }
-  const save = useCallback(() => {
-    setStatus('保存中…')
-    callRemote(remote['prompt-set']({ stage, template: text, project })).then(() => callRemote(remote.prompts({ project })).then((view) => {
-      setData(view)
-      setStatus(text === view.defaults[stage] ? '已保存（与默认一致）' : '已保存 ✓')
-    }), (error: unknown) => {
-      setStatus(`保存失败: ${errorText(error)}`)
-    }).catch((error: unknown) => {
-      setStatus(`保存失败: ${errorText(error)}`)
-    })
-  }, [remote, stage, text, project])
-  const reset = useCallback(() => {
-    setStatus('恢复中…')
-    callRemote(remote['prompt-set']({ stage, template: null, project })).then(() => callRemote(remote.prompts({ project })).then((view) => {
-      setData(view)
-      setText(view.defaults[stage] ?? '')
-      setStatus('已恢复默认 ✓')
-    }), (error: unknown) => {
-      setStatus(`恢复失败: ${errorText(error)}`)
-    }).catch((error: unknown) => {
-      setStatus(`恢复失败: ${errorText(error)}`)
-    })
-  }, [remote, stage, project])
-  if (data === null) {
-    return (
-      <div className={css.pane}>
-        <div className={css.paneHead}>
-          <Button variant="ghost" size="sm" icon={<IconChevronLeftOutline14 size={14} />} onClick={onBack}>返回</Button>
-          <b className={css.paneTitle}>阶段提示词自定义</b>
-        </div>
-        <div className={css.paneScroll}><div className={css.muted}>{status === '' ? '加载提示词…' : status}</div></div>
-      </div>
-    )
-  }
-  const vars = data.vars[stage] ?? []
-  const customized = data.custom[stage] !== undefined
-  return (
-    <div className={css.pane}>
-      <div className={css.paneHead}>
-        <Button variant="ghost" size="sm" icon={<IconChevronLeftOutline14 size={14} />} onClick={onBack}>返回</Button>
-        <b className={css.paneTitle}>阶段提示词自定义</b>
-      </div>
-      <div className={css.paneScroll}>
-        <div className={css.actions}>
-          <select className={css.select} value={stage} onChange={(event) => { pick(event.target.value) }}>
-            {Object.keys(PROMPT_STAGE).map(key => (
-              <option key={key} value={key}>{`${PROMPT_STAGE[key] ?? key}${data.custom[key] !== undefined ? '（已自定义）' : ''}`}</option>
-            ))}
-          </select>
-          <span className={customized ? css.customized : css.muted}>{customized ? '已自定义' : '默认'}</span>
-          <Button variant="primary" size="sm" onClick={() => { save() }}>保存</Button>
-          <Button variant="ghost" size="sm" onClick={() => { reset() }}>恢复默认</Button>
-        </div>
-        <div className={css.muted}>
-          {vars.length > 0 ? `可用变量: ${vars.map(v => `{{${v}}}`).join('  ')}` : '（无变量，纯文本）'}
-        </div>
-        <textarea className={`${css.area} ${css.editorArea}`} value={text} onChange={(event) => { setText(event.target.value) }} />
-        {status !== '' ? <div className={css.muted}>{status}</div> : null}
-      </div>
-    </div>
-  )
-}
-
 /** Chinese labels for project origins. */
 const ORIGIN: Record<string, string> = {
   workspace: '工作区',
@@ -665,8 +399,10 @@ function DirBrowse({ remote, onUse, onCancel }: {
   )
 }
 
-/** Project directory management: list, hide/restore, add (picker/browse/paste). */
-function ProjectManageModal({ open, onClose, remote, store, view }: {
+/** Project directory management: list, hide/restore, add (picker/browse/paste).
+ * Exported for the sidebar-foot submenu, whose 「添加项目」row raises the same
+ * dialog without opening the workbench first. */
+export function ProjectManageModal({ open, onClose, remote, store, view }: {
   open: boolean
   onClose: () => void
   remote: DevflowRemote
@@ -856,12 +592,10 @@ function Section({ title, items, selectedId, onSelect }: {
   )
 }
 
-/** Right-pane mode: the selected item, an artifact, the prompt editor, or settings. */
+/** Right-pane mode: the selected item or a read-only artifact. */
 type Pane =
   | { readonly kind: 'item' }
   | { readonly kind: 'artifact'; readonly title: string; readonly text: string }
-  | { readonly kind: 'prompts' }
-  | { readonly kind: 'settings' }
 
 /**
  * The devflow main-area page. Rendered from the shell overlay layer; anchors
@@ -886,10 +620,6 @@ export function DevflowPage({ store, remote, openSession }: {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  // Optimistic project-switch feedback: the <select> shows the picked key
-  // until the polled view adopts it (setProject triggers an immediate poll).
-  const [pickedProject, setPickedProject] = useState<string | null>(null)
-  const [manageOpen, setManageOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const items = view?.items ?? []
@@ -918,10 +648,11 @@ export function DevflowPage({ store, remote, openSession }: {
     return () => { observer.disconnect() }
   }, [snap.open])
 
-  // Escape unwinds the pane stack first, then closes the page; an open modal
-  // owns its own Escape handling, so the page yields while it is up.
+  // Escape unwinds the pane stack first, then closes the page; the
+  // sidebar-foot submenu and the trigger-owned dialogs own their own Escape
+  // handling, so the page yields while any of them is up.
   useEffect(() => {
-    if (!snap.open || manageOpen) return
+    if (!snap.open || snap.menuOpen || snap.modalOpen) return
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       if (pane.kind !== 'item') setPane({ kind: 'item' })
@@ -929,16 +660,11 @@ export function DevflowPage({ store, remote, openSession }: {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => { document.removeEventListener('keydown', onKeyDown) }
-  }, [snap.open, manageOpen, pane.kind, store])
+  }, [snap.open, snap.menuOpen, snap.modalOpen, pane.kind, store])
 
   // Land focus on the page surface when it opens (baseline focus management).
   useEffect(() => {
     if (snap.open) rootRef.current?.focus()
-  }, [snap.open])
-
-  // Closing the page drops any open dialog with it.
-  useEffect(() => {
-    if (!snap.open) setManageOpen(false)
   }, [snap.open])
 
   const submit = useCallback(() => {
@@ -969,6 +695,9 @@ export function DevflowPage({ store, remote, openSession }: {
   if (!snap.open) return null
 
   const active = items.filter(i => i.status === 'active')
+  // The header shows the partition as read-only text — switching and adding
+  // live in the sidebar-foot submenu, so the workbench states, not chooses.
+  const activeProject = view?.projects.find(p => p.key === view.project) ?? null
   const waiting = items.filter(i => i.questions !== null && i.status !== 'active' && i.status !== 'paused')
   const pool = items.filter(i => i.questions === null && i.status !== 'active' && i.status !== 'done'
     && i.status !== 'paused' && i.status !== 'rejected')
@@ -1012,44 +741,17 @@ export function DevflowPage({ store, remote, openSession }: {
           <b className={css.title}>自动开发流水线</b>
           <span className={css.subtitle}>{statusLine}</span>
         </div>
-        {view !== null && view.projects.length > 0
+        {activeProject !== null
           ? (
-            <select
-              className={css.select}
-              value={pickedProject !== null && pickedProject !== view.project ? pickedProject : view.project ?? ''}
-              title={view.projects.find(p => p.key === view.project)?.root ?? '选择项目'}
-              aria-label="切换项目"
-              onChange={(event) => {
-                setPickedProject(event.target.value)
-                store.setProject(event.target.value)
-              }}
-            >
-              {view.projects.map(p => <option key={p.key} value={p.key}>{p.name}</option>)}
-            </select>
+            <span className={css.projectName} title={activeProject.root}>
+              {`当前：${activeProject.name}`}
+            </span>
           )
           : null}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="管理项目"
-          title="管理项目（自动发现 / 添加 / 移除）"
-          onClick={() => { setManageOpen(true) }}
-        >
-          <IconPlusOutline16 size={14} />
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => { setPane({ kind: 'settings' }) }}>设置</Button>
-        <Button variant="ghost" size="sm" onClick={() => { setPane({ kind: 'prompts' }) }}>提示词</Button>
         <Button variant="ghost" size="sm" aria-label="关闭" onClick={() => { store.close() }}>
           <IconCloseOutline16 size={14} />
         </Button>
       </header>
-      <ProjectManageModal
-        open={manageOpen}
-        onClose={() => { setManageOpen(false) }}
-        remote={remote}
-        store={store}
-        view={view}
-      />
       {snap.offline ? <div className={css.noticeBar}>⚠ 与宿主的连接中断，正在自动重试</div> : null}
       {view?.error != null ? <div className={css.noticeBar}>{`⚠ ${view.error}`}</div> : null}
       <div className={css.body}>
@@ -1098,32 +800,21 @@ export function DevflowPage({ store, remote, openSession }: {
           </div>
         </aside>
         <main className={css.detail}>
-          {pane.kind === 'settings'
-            ? (
-              <SettingsPane
-                remote={remote}
-                project={view?.project ?? null}
-                pumpStatus={view?.pump ?? null}
-                onBack={() => { setPane({ kind: 'item' }) }}
-              />
-            )
-            : pane.kind === 'prompts'
-            ? <PromptPane remote={remote} project={view?.project ?? null} onBack={() => { setPane({ kind: 'item' }) }} />
-            : pane.kind === 'artifact'
-              ? <ArtifactPane title={pane.title} text={pane.text} onBack={() => { setPane({ kind: 'item' }) }} />
-              : selected !== undefined
-                ? (
-                  <ItemDetail
-                    item={selected}
-                    remote={remote}
-                    store={store}
-                    onArtifact={openArtifact}
-                    openSession={openSession}
-                  />
-                )
-                : (
-                  <div className={css.emptyDetail}>从左侧选择一条需求查看详情</div>
-                )}
+          {pane.kind === 'artifact'
+            ? <ArtifactPane title={pane.title} text={pane.text} onBack={() => { setPane({ kind: 'item' }) }} />
+            : selected !== undefined
+              ? (
+                <ItemDetail
+                  item={selected}
+                  remote={remote}
+                  store={store}
+                  onArtifact={openArtifact}
+                  openSession={openSession}
+                />
+              )
+              : (
+                <div className={css.emptyDetail}>从左侧选择一条需求查看详情</div>
+              )}
         </main>
       </div>
     </div>

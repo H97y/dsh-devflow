@@ -97,6 +97,18 @@
   white-space: nowrap;
 }
 
+/* Read-only current-project label (switching lives in the sidebar submenu);
+ * the full root path rides the title tooltip. */
+.projectName {
+  flex: none;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
 .subtitle {
   flex: 1;
   min-width: 0;

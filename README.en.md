@@ -2,9 +2,9 @@
 
 An automated development pipeline plugin for DeepSeek Harness: requirement pool → LLM batch refinement (with size assessment) → best-candidate selection → design → plan → review & revision loops (≤3 rounds) → implementation (small items in the main workspace / medium-large items in worktrees) → code review loops (≤3 rounds) → web verification → integration-branch merge back to main → development report.
 
-Every potentially blocking decision is made automatically by the model following project conventions by default; the few that genuinely need a human ruling enter the per-stage waiting queue and auto-resume once answered on the page. All state persists under `<root>/.devflow/`. Requirement pools are isolated per project with zero configuration: projects under the workspace are auto-discovered, any folder can be added or removed from the panel, and multiple projects' pipelines run in parallel.
+Every potentially blocking decision is made automatically by the model following project conventions by default; the few that genuinely need a human ruling enter the per-stage waiting queue and auto-resume once answered on the page. All state persists under `<root>/.devflow/`. Requirement pools are isolated per project with zero configuration: projects under the workspace are auto-discovered, any folder can be added or removed through the sidebar menu, and multiple projects' pipelines run in parallel.
 
-The browser side is a native embedded UI (not a floating popup): an entry at the sidebar foot (same level as "Settings") opens a full main-area workbench page. The plugin mounts its own generated Remote namespace, modifies no harness product source, and works out of the box with `pnpm add`.
+The browser side is a native embedded UI (not a floating popup): an entry at the sidebar foot (same level as "Settings") expands a project submenu — the project list plus an "Add project" row using the same folder-add glyph as the harness workspace picker — and picking a project opens that project's full main-area workbench page. The plugin mounts its own generated Remote namespace, modifies no harness product source, and works out of the box with `pnpm add`.
 
 ## Repository layout
 
@@ -17,7 +17,7 @@ The browser side is a native embedded UI (not a floating popup): an entry at the
 │   ├── src/config/            # unified settings (per-stage model overrides + auto-pump toggle/model)
 │   ├── src/prompts.ts         # 9-stage default prompts + {{variable}} rendering
 │   ├── src/types.ts           # public types
-│   ├── src/client/            # browser UI (sidebar entry + main-area page with project switcher)
+│   ├── src/client/            # browser UI (sidebar project-submenu entry + main-area page)
 │   └── lib/typert.*           # vendored wire artifacts (see below)
 └── scripts/
     ├── tsdown.client.ts       # browser-bundle preset vendored from harness
@@ -102,35 +102,39 @@ your profile patch layer (`~/.dsh/profiles/web/cordis.patch.yml`):
 for standalone project folders (directories carrying `.git` /
 `package.json` / `go.mod`-style markers; a root that is itself a single repo
 counts as one project, a projects folder is scanned two levels deep for
-`~/projects/group/repo` layouts) and lists them in the top-right switcher —
-every project runs a fully isolated pool, `.devflow/` state, prompt
-overrides, tick lane, and main-workspace/worktree budget, all in parallel.
-Projects elsewhere are added through the「＋」beside the switcher: the OS
-directory chooser, the in-app browse flow, or a pasted path (the same
+`~/projects/group/repo` layouts) and lists them in the sidebar entry's
+project submenu, where picking one switches the partition — every project
+runs a fully isolated pool, `.devflow/` state, prompt overrides, tick lane,
+and main-workspace/worktree budget, all in parallel. The workbench header
+states the current project as read-only text (hover shows its root path).
+Projects elsewhere are added through the submenu's pinned「添加项目」row:
+the OS directory chooser, the in-app browse flow, or a pasted path (the same
 picking capability the workspace manager uses), and can be removed or
 restored at any time; manual adds and hides persist in
 `<root>/.devflow/projects.json`. Item ids embed the project key
 (`<key>-r<n>`), so panel operations and pump reports route automatically.
 
-### Per-stage model configuration
+### Pipeline settings (stage models / auto-pump / prompts)
 
-The workbench header's "设置" (Settings) opens the unified settings pane:
-every pipeline stage (refine / design / plan / review / code review /
-report) can pick its own model, with candidates read-only from the models
-configured in harness (the plugin manages no API keys). Unset stages fall
-back to the harness-active model; a configured model later removed from
-harness falls back at runtime and is flagged as drifted in the pane.
-Saves take effect immediately and persist per project to
-`<project-root>/.devflow/settings.json` (one file per project; runtime
-state, untracked by git).
+The gear at the right end of the sidebar's「开发流水线」row opens the pipeline
+settings dialog (a left nav rail of sections plus right-side options, the
+same layout as the harness settings dialog): every pipeline stage
+(refine / design / plan / review / code review / report) can pick its own
+model, with candidates read-only from the models configured in harness (the
+plugin manages no API keys). Unset stages fall back to the harness-active
+model; a configured model later removed from harness falls back at runtime
+and is flagged as drifted in the pane. Saves take effect immediately and
+persist per project to `<project-root>/.devflow/settings.json` (one file
+per project; runtime state, untracked by git).
 
 Reset semantics: deleting a project's settings.json resets that project
 to defaults (the next load recreates a default document).
 
-Panel scope: prompt templates keep their own「提示词」entry in the workbench
-(content configuration, not migrated into the settings pane); host-level
-settings (`root`, concurrency caps) live in the profile patch layer and
-are not the panel's business.
+The dialog also hosts the stage-prompts section: the 9 stage prompt
+templates are edited per project (content configuration) in the same
+dialog, one nav click away from the model routing. Host-level settings
+(`root`, concurrency caps) live in the profile patch layer and are not
+the dialog's business.
 
 ### Auto-pump: unattended tool stages
 
@@ -180,15 +184,21 @@ With auto-pump off (the default), behavior is unchanged: the card shows
 2. **Verify the mount**: a "开发流水线" (Dev Pipeline) entry appears at the
    sidebar foot above Settings (a 56px rail circle when the sidebar is
    collapsed) — if not, see troubleshooting
-3. Click it to open the main-area workbench; paste a rough requirement into
-   the pool entry ("add a search box to the list") and hit submit
-4. The background runs: batch refinement (with size assessment) → selection →
+3. Click the entry to expand its project submenu: it lists every project
+   partition (the active one carries ✓) and picking any project switches the
+   partition and opens that project's main-area workbench; the pinned
+   "添加项目" (Add project) row at the bottom — the same folder-add glyph as
+   the harness workspace picker's top-left button — opens the project-manage
+   dialog for choosing / browsing / pasting a project folder
+4. Paste a rough requirement into the pool entry
+   ("add a search box to the list") and hit submit
+5. The background runs: batch refinement (with size assessment) → selection →
    design → plan → review & revision → implementation (the `devflow` model
    tool, driven by the session pump or the auto-pump) → code review → web
    verification → merge to main → report; anything needing your ruling
    pauses in the waiting queue or as a pump-agent question and auto-resumes
    once answered
-5. All state lives under `<root>/.devflow/` and survives restarts
+6. All state lives under `<root>/.devflow/` and survives restarts
 
 ### Troubleshooting
 
@@ -198,7 +208,7 @@ With auto-pump off (the default), behavior is unchanged: the card shows
 | Page opens but the status bar reports a connection error | Host half not mounted: the composition row's `name: dsh-devflow` must match the installed package name |
 | No `.devflow/` directory anywhere | It sits under the configured `root` (default: the `dsh web` working directory); set it explicitly per "Configure the workspace" |
 
-The browser UI mounts in two additive places: the entry button registers in `sidebar.footer.action` (sidebar foot, beside Settings, styled to match the native trigger rows; collapses to a 56px rail circle; carries a waiting-decision count badge); clicking it opens a full main-area page through `shell.overlay` (anchored to the sidebar's live right edge, tracking drags/collapses; a two-column master-detail layout — pool column with grouped sections on the left, item detail / artifact viewer / stage prompt editor on the right; Escape unwinds level by level). The browser half `$mount`s this package's generated `/remote` artifact itself — the `remote.devflow` namespace is mounted by the plugin, with no host-assembly wiring, so the npm install path works as-is. The `devflow` model tool (`next` / `report`) is called by the session pump to execute implement / fix-code / verify / merge tasks; with the auto-pump enabled, those tasks run in standalone agent sessions the plugin host spawns itself (see the auto-pump section), and both shapes coexist.
+The browser UI mounts in two additive places: the entry button registers in `sidebar.footer.action` (sidebar foot, beside Settings, styled to match the native trigger rows; collapses to a 56px rail circle; carries a waiting-decision count badge; the wide row's right end adds a gear button opening the pipeline settings dialog — a left nav rail of sections「阶段模型 / 自动泵」and「阶段提示词」plus right-side options, laid out like the harness settings dialog); clicking the entry expands the project submenu (portal-anchored, scrolling internally): the project-partition list (active partition checked) plus a pinned "添加项目" footer row bearing the harness workspace picker's folder-add glyph. Picking a project switches the partition and opens the full main-area page through `shell.overlay` (anchored to the sidebar's live right edge, tracking drags/collapses; a two-column master-detail layout — pool column with grouped sections on the left, item detail / artifact viewer on the right; Escape unwinds level by level), while the add row raises the project-manage dialog in place. The browser half `$mount`s this package's generated `/remote` artifact itself — the `remote.devflow` namespace is mounted by the plugin, with no host-assembly wiring, so the npm install path works as-is. The `devflow` model tool (`next` / `report`) is called by the session pump to execute implement / fix-code / verify / merge tasks; with the auto-pump enabled, those tasks run in standalone agent sessions the plugin host spawns itself (see the auto-pump section), and both shapes coexist.
 
 ## Publishing
 

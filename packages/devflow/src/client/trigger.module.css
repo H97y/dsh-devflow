@@ -1,7 +1,26 @@
 /* Sidebar-foot trigger: mirrors the settings trigger rhythm (34px compact
  * row / 36px rail circle) so the two foot controls read as one native group.
- * The shell's footerActions container owns placement; this button owns its
- * geometry and hover chrome, per the slot contract. */
+ * The wide row is a segmented group — the menu cell (icon + label + count
+ * pill) plus the gear cell opening the pipeline settings dialog. The shell's
+ * footerActions container owns placement; these cells own their geometry
+ * and hover chrome, per the slot contract. */
+
+/* The Menu's anchor wrapper: stands where the bare button used to as the
+ * footerActions flex child, so the row keeps its full-width footprint. */
+.menuRoot {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Segmented wide row: one 34px-tall strip bleeding into the column padding
+ * (the settings trigger's negative-margin trick), hover per segment. */
+.row {
+  display: flex;
+  align-items: stretch;
+  width: calc(100% + 8px);
+  height: 34px;
+  margin: 4px -4px 4px;
+}
 
 .trigger,
 .rail {
@@ -17,17 +36,35 @@
   box-sizing: border-box;
 }
 
-/* Wide row: the settings trigger's compact vertical rhythm. */
+/* Wide menu cell: fills the row left of the gear, the settings trigger's
+ * compact vertical rhythm. */
 .trigger {
+  flex: 1;
+  min-width: 0;
   gap: 8px;
-  width: calc(100% + 8px);
-  height: 34px;
-  margin: 4px -4px 4px;
+  height: 100%;
   padding: 6px 2px 6px 10px;
-  border-radius: 12px;
+  border-radius: 12px 0 0 12px;
   overflow: hidden;
   font-size: 14px;
   line-height: 22px;
+}
+
+/* Gear cell: the row's right end, its own hover segment. */
+.gear {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 100%;
+  padding: 0 4px 0 2px;
+  border: none;
+  border-radius: 0 12px 12px 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+  box-sizing: border-box;
 }
 
 /* Rail circle: the same 36x36 box as the other rail controls. */
@@ -42,11 +79,13 @@
 }
 
 .trigger:hover,
+.gear:hover,
 .rail:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Open page keeps the trigger pressed, like a persistent selection. */
+/* Open page or expanded submenu keeps the menu cell pressed, like a
+ * persistent selection. */
 .active {
   background: var(--dsw-alias-interactive-bg-active);
 }
@@ -56,7 +95,8 @@
   white-space: nowrap;
 }
 
-/* Waiting-decision count pill (wide row): right-aligned, neutral chrome. */
+/* Waiting-decision count pill (wide row): right-aligned inside the menu
+ * cell, neutral chrome. */
 .badge {
   flex: none;
   margin-left: auto;

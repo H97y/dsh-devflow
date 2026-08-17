@@ -4,6 +4,10 @@
  *
  * - `sidebar.footer.action` — the entry button beside Settings at the
  *   sidebar foot (settings-trigger rhythm, rail circle when collapsed);
+ *   clicking it expands a project submenu whose rows switch the partition
+ *   and open the workbench, with a pinned 「添加项目」row raising the
+ *   manage dialog; the wide row's right end carries a gear opening the
+ *   pipeline settings dialog (stage models / auto-pump / prompts);
  * - `shell.overlay` — the main-area page, anchored to the sidebar's live
  *   right edge while open (renders null while closed).
  *
@@ -88,7 +92,7 @@ export async function apply(ctx: Context): Promise<void> {
     }
   ctx.effect(() => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
     { name: 'sidebar.footer.action', id: 'devflow-trigger', order: 10, label: '自动开发流水线' },
-    (props: { wide: boolean }) => renderTrigger(store, props.wide),
+    (props: { wide: boolean }) => renderTrigger(store, remote, props.wide),
   )), 'devflow.trigger')
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register(
     { name: 'shell.overlay', id: 'devflow-page', order: 80, label: '自动开发流水线' },

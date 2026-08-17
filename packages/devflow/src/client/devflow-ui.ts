@@ -85,6 +85,10 @@ export function errorText(error: unknown): string {
 export interface DevflowUiSnapshot {
   /** Whether the main-area devflow page is open. */
   readonly open: boolean
+  /** Whether the sidebar-foot project submenu is expanded. */
+  readonly menuOpen: boolean
+  /** Whether a trigger-owned modal (settings / manage projects) is open. */
+  readonly modalOpen: boolean
   /** Latest polled projection; null before the first response. */
   readonly view: DevflowView | null
   /** True when the last poll failed (the last good view is retained). */
@@ -125,7 +129,7 @@ export class DevflowUiStore {
 
   #remote: DevflowRemote
   #listeners = new Set<() => void>()
-  #snap: DevflowUiSnapshot = { open: false, view: null, offline: false }
+  #snap: DevflowUiSnapshot = { open: false, menuOpen: false, modalOpen: false, view: null, offline: false }
   #timer: number | undefined
   #inFlight = false
   /** Active project key; null until the first response adopts the server default. */
@@ -139,21 +143,44 @@ export class DevflowUiStore {
   /** Open the main-area page. */
   open(): void {
     if (this.#snap.open) return
-    this.#emit(true, this.#snap.view, this.#snap.offline)
+    this.#emit({ open: true })
     this.#applyCadence()
   }
 
   /** Close the main-area page. */
   close(): void {
     if (!this.#snap.open) return
-    this.#emit(false, this.#snap.view, this.#snap.offline)
+    this.#emit({ open: false })
     this.#applyCadence()
   }
 
-  /** Toggle the main-area page (the sidebar-foot trigger's click action). */
-  toggle(): void {
-    this.#emit(!this.#snap.open, this.#snap.view, this.#snap.offline)
-    this.#applyCadence()
+  /** Expand the sidebar-foot project submenu. */
+  openMenu(): void {
+    if (this.#snap.menuOpen) return
+    this.#emit({ menuOpen: true })
+  }
+
+  /** Collapse the sidebar-foot project submenu. */
+  closeMenu(): void {
+    if (!this.#snap.menuOpen) return
+    this.#emit({ menuOpen: false })
+  }
+
+  /** Toggle the sidebar-foot project submenu (the trigger row's click action). */
+  toggleMenu(): void {
+    this.#emit({ menuOpen: !this.#snap.menuOpen })
+  }
+
+  /** Mark a trigger-owned modal open (page Escape handling yields to it). */
+  openModal(): void {
+    if (this.#snap.modalOpen) return
+    this.#emit({ modalOpen: true })
+  }
+
+  /** Mark every trigger-owned modal closed. */
+  closeModal(): void {
+    if (!this.#snap.modalOpen) return
+    this.#emit({ modalOpen: false })
   }
 
   /**
@@ -221,7 +248,7 @@ export class DevflowUiStore {
       // later poll means the server fell back (the selected project was
       // removed) — adopt the fallback instead of erroring.
       if (view.project !== null) this.#projectKey = view.project
-      this.#emit(this.#snap.open, view, false)
+      this.#emit({ view, offline: false })
     }, (error: unknown) => {
       this.#inFlight = false
       if (requested !== this.#projectKey) {
@@ -241,12 +268,13 @@ export class DevflowUiStore {
           items: [],
         }
         : this.#snap.view
-      this.#emit(this.#snap.open, fallback, true)
+      this.#emit({ view: fallback, offline: true })
     })
   }
 
-  #emit(open: boolean, view: DevflowView | null, offline: boolean): void {
-    this.#snap = { open, view, offline }
+  /** Merge a snapshot patch and notify every subscriber. */
+  #emit(patch: Partial<DevflowUiSnapshot>): void {
+    this.#snap = { ...this.#snap, ...patch }
     for (const fn of this.#listeners) fn()
   }
 }

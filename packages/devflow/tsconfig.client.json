@@ -27,6 +27,7 @@
     "src/client/index.ts",
     "src/client/devflow-ui.ts",
     "src/client/trigger.tsx",
+    "src/client/settings.tsx",
     "src/client/page.tsx"
   ]
 }
