@@ -10,13 +10,6 @@
  * shape. Last write wins; no concurrency protection or optimistic locking
  * (single-user, single-editor assumption).
  *
- * Re-import semantics (D20, explicit): `importLegacy` triggers iff
- * settings.json does not exist, and legacy files are kept forever (copy,
- * never delete) — deleting settings.json re-triggers the legacy import
- * rather than resetting to defaults. To reset, edit the file content to
- * `{"version":1,"stageModels":{}}`. No marker file / migration-completed
- * bit is introduced (YAGNI).
- *
  * @module @deepseek-ai/dsh-devflow/src/config/store
  */
 
@@ -83,9 +76,9 @@ export class SettingsStore {
     if (this.cache !== null) return { settings: this.cache, warnings: this.cacheWarnings }
     const raw = await this.read()
     if (raw === null) {
-      // D20: absence is the sole import trigger; legacy files are copied,
-      // never removed, so the import is idempotent per existence.
-      const settings = await this.importLegacy()
+      // No file yet: defaults, persisted so the file exists from the first
+      // read. Deleting the file resets to defaults (next load recreates it).
+      const settings = defaultSettings()
       await this.persist(settings)
       this.cache = settings
       this.cacheWarnings = []
@@ -159,19 +152,6 @@ export class SettingsStore {
       return { provider: '', model: '', source: 'fallback', note: `${note}；且 harness 无当前模型` }
     }
     return { provider: harness.active.provider, model: harness.active.model, source: 'fallback', note }
-  }
-
-  /**
-   * Copy-import legacy preference files (D3/D20). The current legacy
-   * surfaces are content registries rather than preference toggles —
-   * prompts.json holds prompt overrides with its own panel editor, and
-   * projects.json is runtime state — so per the migration criteria
-   * (preferences move, execution state stays) there is nothing to migrate:
-   * this returns defaults. The trigger logic stays so future legacy keys
-   * have exactly one insertion point.
-   */
-  private async importLegacy(): Promise<Settings> {
-    return defaultSettings()
   }
 
   /**

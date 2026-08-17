@@ -119,9 +119,8 @@ harness falls back at runtime and is flagged as drifted in the pane.
 Saves take effect immediately and persist to `<root>/.devflow/settings.json`
 (runtime state, untracked by git).
 
-Reset semantics: **deleting settings.json re-imports legacy settings
-rather than resetting to defaults**; to reset, edit the file content to
-`{"version":1,"stageModels":{}}`.
+Reset semantics: deleting settings.json resets to defaults (the next
+load recreates a default document).
 
 Panel scope: prompt templates keep their own「提示词」entry in the workbench
 (content configuration, not migrated into the settings pane); host-level

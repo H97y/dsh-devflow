@@ -1155,7 +1155,7 @@ export class DevflowService extends TypertRemoteService {
       design: pipe.artifacts.design,
       plan: pipe.artifacts.plan,
       answers: this.answersText(pipe),
-    }), 8192, 'review', item))
+    }), 8192, 'review-dp', item))
     pipe.round++
     const issues = asIssues(output.issues)
     pipe.artifacts.reviews.push({ phase: 'dp', round: pipe.round, verdict: asText(output.verdict, ''), issues })
@@ -1229,7 +1229,7 @@ export class DevflowService extends TypertRemoteService {
       fixReport: lastFix?.summary ?? '无',
       files: filesText,
       answers: this.answersText(pipe),
-    }), 8192, 'codeReview', item))
+    }), 8192, 'code-review', item))
     pipe.round++
     const issues = asIssues(output.issues)
     pipe.artifacts.reviews.push({ phase: 'code', round: pipe.round, verdict: asText(output.verdict, ''), issues })

@@ -10,7 +10,8 @@
 import { describe, expect, it } from 'vitest'
 import { SettingsStore } from '../src/config/store.ts'
 import type { HarnessModelState } from '../src/config/store.ts'
-import { defaultSettings, parseStageModel, validateSettings } from '../src/config/schema.ts'
+import { STAGE_IDS, STAGE_LABELS, defaultSettings, parseStageModel, validateSettings } from '../src/config/schema.ts'
+import type { DevflowStage } from '../src/types.ts'
 import { activeHarnessModel, listHarnessModels } from '../src/models.ts'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -53,6 +54,19 @@ describe('settings schema', () => {
     expect(parseStageModel('prov/')).toBeNull()
     expect(parseStageModel('/model')).toBeNull()
     expect(parseStageModel('plain')).toBeNull()
+  })
+})
+
+describe('stage-key alignment (single naming scheme)', () => {
+  it('every configurable stage key is a real routing key with a label', () => {
+    const devflowStages: readonly string[] = ['design', 'plan', 'review-dp', 'implement', 'code-review', 'fix-code', 'verify', 'merge', 'report']
+    const routingKeys = new Set([...devflowStages, 'refine']) // refine is the pool-stage LLM call
+    for (const id of STAGE_IDS) {
+      expect(routingKeys.has(id)).toBe(true)   // no third naming scheme drifts in
+      expect(typeof STAGE_LABELS[id]).toBe('string')
+    }
+    // Every LLM-backed routing stage is configurable: the six chat() stages.
+    expect([...STAGE_IDS].sort()).toEqual(['code-review', 'design', 'plan', 'refine', 'report', 'review-dp'])
   })
 })
 
