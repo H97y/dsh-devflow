@@ -76,14 +76,24 @@ export interface Config {
   readonly tickIntervalMs: number
 }
 
-/** Schemastery validation with deployment defaults. */
-export const Config: s<Config> = s.object({
+/**
+ * Schemastery validation with deployment defaults. Declared before the class
+ * so the class can expose it as `static Config` — cordis resolves a CLASS
+ * plugin's schema from that static only; a module-level export alone is
+ * never consulted, which silently skipped every default (the field incident:
+ * maxActive undefined → admission loop never ran; tickIntervalMs undefined →
+ * 1ms interval).
+ */
+const ConfigSchema: s<Config> = s.object({
   root: s.string().default(process.cwd()),
   maxActive: s.number().step(1).min(1).default(3),
   maxWorktrees: s.number().step(1).min(0).default(2),
   logCap: s.number().step(1).min(5).default(40),
   tickIntervalMs: s.number().step(1).min(500).default(2000),
 })
+
+/** Public config schema (kept as a named export for the package's API face). */
+export const Config: s<Config> = ConfigSchema
 
 /**
  * One project partition's process-local runtime. Everything the single-root
@@ -233,6 +243,13 @@ class Cancelled extends Error {
 export class DevflowService extends TypertRemoteService {
   static inject = ['llm', 'fs', 'tools']
 
+  /**
+   * The schema cordis applies to the composition row's `config`. Without
+   * this static, `resolveConfig` returns the raw row verbatim and every
+   * default above is silently skipped.
+   */
+  static Config = ConfigSchema
+
   private readonly root: string
   private readonly rootDir: string
   private readonly rootPolicy: SandboxExecutionPolicy
@@ -248,10 +265,16 @@ export class DevflowService extends TypertRemoteService {
 
   /**
    * @param ctx - Host context carrying llm/fs/tools.
-   * @param config - Deployment configuration.
+   * @param rawConfig - Deployment configuration (already validated when the
+   * loader honored `static Config`; re-normalized here regardless so direct
+   * instantiation and schema-less loads get the defaults too).
    */
-  constructor(ctx: Context, config: Config) {
+  constructor(ctx: Context, rawConfig: Config) {
     super(ctx, 'devflow')
+    // Defense in depth: applying the schema is idempotent, so a loader that
+    // already validated changes nothing and a schema-less load fills every
+    // default instead of handing the state machine undefined limits.
+    const config = ConfigSchema(rawConfig ?? {}) as Config
     this.root = config.root
     this.rootDir = `${config.root}/.devflow`
     this.rootPolicy = { mode: 'workspace-write', workspaceRoot: config.root }

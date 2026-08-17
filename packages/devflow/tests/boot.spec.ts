@@ -109,7 +109,7 @@ function persistedState(): string {
 }
 
 /** Build the service against fakes; tickIntervalMs=1 keeps the test fast. */
-function bootService(files: Map<string, string>, llm: unknown): DevflowService {
+function bootService(files: Map<string, string>, llm: unknown, rawConfig?: Record<string, unknown>): DevflowService {
   const ctx = {
     fs: makeFakeFs(files),
     llm,
@@ -125,18 +125,18 @@ function bootService(files: Map<string, string>, llm: unknown): DevflowService {
     // cordis Service base registers itself through ctx.reflect.provide.
     reflect: { provide: () => undefined },
   }
-  return new DevflowService(ctx as never, {
+  return new DevflowService(ctx as never, rawConfig ?? {
     root: '/ws/demo',
     maxActive: 3,
     maxWorktrees: 2,
     logCap: 40,
-    tickIntervalMs: 1,
+    tickIntervalMs: 500,
   })
 }
 
 /** Poll the persisted state until the predicate passes (bounded wait). */
 async function untilTrue(check: () => boolean): Promise<boolean> {
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 400; i++) {
     if (check()) return true
     await new Promise(resolve => setTimeout(resolve, 5))
   }
@@ -188,6 +188,32 @@ function runtimeOf(service: DevflowService): RuntimeProbe {
   const first = map.values().next()
   return first.value as RuntimeProbe
 }
+
+describe('devflow deployment config', () => {
+  it('applies schema defaults when the composition row carries only root', async () => {
+    // The field incident: cordis resolves a CLASS plugin's schema from
+    // `static Config`; before that static existed the raw row passed through
+    // and maxActive/tickIntervalMs were undefined — the admission gate
+    // (0 < undefined) never ran and setInterval fired every 1ms.
+    const files = new Map<string, string>([
+      ['/ws/demo/.git/HEAD', 'ref: refs/heads/main'],
+      ['/ws/demo/.devflow/state.json', persistedState()],
+    ])
+    const hang = { count: 0 }
+    const service = bootService(files, makeFakeLlm([
+      { type: 'text-delta', text: '{"design":"# d","questions":[]}' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ], hang))
+    try {
+      // Root-only config, exactly like the real profile row: defaults must
+      // come from the schema, or the item stays ready forever.
+      const admitted = await untilTrue(() => readItem(files)?.status === 'active')
+      expect(admitted).toBe(true)
+    } finally {
+      stopService(service)
+    }
+  })
+})
 
 describe('devflow cold-boot autonomy', () => {
   it('admits a persisted ready item with no Remote call at all', async () => {
